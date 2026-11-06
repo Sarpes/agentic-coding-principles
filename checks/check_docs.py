@@ -1,7 +1,7 @@
 """Documentation gate: checks DECISIONS.md, AI-Agents.md and (if present) REQUIREMENTS.md.
 
-Usage: python checks/check_docs.py <repository folder>
-Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 usage error.
+Usage: python checks/check_docs.py [repository folder]   (default: the current directory)
+Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 usage error (more than one argument, or not a directory).
 Line numbers are 1-based lines of the original file; 0 means the problem concerns the whole file.
 """
 from __future__ import annotations
@@ -113,11 +113,21 @@ def field_problems(name: str, heading_line: int, body, required, strict: bool, f
     return problems
 
 
+def heading_form_problems(lines: list[str], like: re.Pattern, exact: re.Pattern,
+                          expected: str, file: str) -> list[Problem]:
+    """Heading lines that look like an entry heading but are not written in the exact form."""
+    return [Problem(file, i + 1, f"heading '{line.strip()}' is not in the form '{expected}'")
+            for i, line in enumerate(lines)
+            if like.match(line) and not exact.match(line) and not GROUPED.match(line)]
+
+
 def decisions_problems(text: str, file: str = "DECISIONS.md") -> list[Problem]:
     lines = prepare(text)
     items = entries(lines, re.compile(r"^### D(\d+)\."))
     problems = [Problem(file, i + 1, f"{m.group(1)}: one decision per entry (split the grouped heading)")
                 for i, line in enumerate(lines) if (m := GROUPED.match(line))]
+    problems += heading_form_problems(lines, re.compile(r"^#{1,6}\s*D\d+"), re.compile(r"^### D\d+\. "),
+                                      "### D<number>. <title>", file)
     problems += numbering_problems(items, "D", file)
     for n, heading_line, body in items:
         problems += field_problems(f"D{n}", heading_line, body, DECISION_FIELDS, True, file)
@@ -132,7 +142,10 @@ def decisions_problems(text: str, file: str = "DECISIONS.md") -> list[Problem]:
 def ai_log_problems(text: str, file: str = "AI-Agents.md") -> list[Problem]:
     lines = prepare(text)
     items = entries(lines, re.compile(r"^### (\d+)\."))
-    problems = numbering_problems(items, "", file)
+    # 1-3 digits only, so a heading such as "### 2026 plans" is not mistaken for an entry
+    problems = heading_form_problems(lines, re.compile(r"^#{1,6}\s*\d{1,3}(?:[.)]|\s|$)"),
+                                     re.compile(r"^### \d+\. "), "### <number>. <title>", file)
+    problems += numbering_problems(items, "", file)
     for n, heading_line, body in items:
         problems += field_problems(f"entry {n}", heading_line, body, AI_LOG_FIELDS, False, file)
     if not items:
@@ -201,12 +214,12 @@ def check_repo(root: Path) -> list[Problem]:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
-        print("usage: check_docs.py <repository folder>", file=sys.stderr)
+    if len(args) > 1:
+        print("usage: check_docs.py [repository folder]", file=sys.stderr)
         return 2
-    root = Path(args[0])
+    root = Path(args[0]) if args else Path.cwd()
     if not root.is_dir():
-        print(f"check_docs.py: not a directory: {args[0]}", file=sys.stderr)
+        print(f"check_docs.py: not a directory: {root}", file=sys.stderr)
         return 2
     problems = check_repo(root)
     for p in problems:

@@ -14,7 +14,7 @@ Success: a new project can be carried end to end (intake → retro) with these p
 
 ## 2. Goals, non-goals, anti-goals
 
-Goals (v0.1, tonight):
+Goals (v0.1, for the first release):
 - An 8-stage framework with one gate per stage.
 - Principles per stage, each with the incident behind it and how to check it.
 - Copy-ready templates for the project documents.
@@ -32,7 +32,7 @@ Anti-goals (a failure even if it works):
 ## 3. Constraints
 
 - Python 3.11+, standard library only; `unittest` (no pytest dependency). Runs on Windows, macOS, Linux.
-- English, MIT licence, public at `github.com/Sarpes/agentic-coding-principles`, folder: the project folder.
+- English, MIT licence, public at `github.com/Sarpes/agentic-coding-principles`.
 - Subject to the documentation rules below: `DECISIONS.md` and `AI-Agents.md` complete before every push.
 - Handovers go to a private companion repo; public files never link to it.
 - Git: one branch per task, PRs merged with merge commits after the owner's OK, decision entries in the same branch.
@@ -87,7 +87,7 @@ Each principle in `principles/NN-stage.md`:
 - **Enforced by:** template | check_docs | tool-call hook | CI | human gate
 ```
 
-Principle set (lessons from projects built so far, reviewed 06.11): intake E1-E3, B10; design B1-B3, E4, E5, A1-A2, A7-A8, C3; plan E6, A5; build B5-B9, C1-C2, C4-C5, E7-E9; verify A6, E10, E11; ship D1-D4, E12, A3-A4; own E13; retro E14. Wording is the builder's, within the format above.
+Principle set (lessons from projects built so far, reviewed 06.11): intake E1-E3, B10; design B1-B3, E4, E5, A1-A2, A7-A8, C3; plan E6, A5; build B5-B9, C1-C2, C4-C5, E7-E9; verify A6, E10, E11; ship D1-D4, E12, A3-A4; own E13; retro E14. Wording is the builder's, within the format above. (superseded: see DECISIONS.md D8 and principles/README.md for the final set)
 
 ## 7. Templates
 

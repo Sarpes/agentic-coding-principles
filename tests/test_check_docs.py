@@ -1,6 +1,7 @@
 """Tests for the documentation gate. All inputs are built as strings here."""
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -357,6 +358,32 @@ class RepoCheck(unittest.TestCase):
         self.assertEqual(check_repo(SCRIPT.parent.parent), [])
 
 
+class MisformedHeadings(unittest.TestCase):
+    def test_decision_misforms_fire(self):
+        for bad in ("### D2 Title", "## D2.", "#### D2.", "### D2.Title", "###D2. Title"):
+            with self.subTest(bad=bad):
+                text = decisions_doc(decision(1), decision(2, heading=bad))
+                probs = decisions_problems(text)
+                hits = [p for p in probs if p.line == line_of(text, bad) and "### D<number>. " in p.message]
+                self.assertEqual(len(hits), 1, probs)
+
+    def test_ai_log_misforms_fire(self):
+        for bad in ("### 2 Title", "## 2.", "### 2) Title", "#### 2. Title"):
+            with self.subTest(bad=bad):
+                text = log_doc(log_entry(1), bad + "\n\n" + "\n".join(fields(LOG_LABELS)) + "\n")
+                probs = ai_log_problems(text)
+                hits = [p for p in probs if p.line == line_of(text, bad) and "### <number>. " in p.message]
+                self.assertEqual(len(hits), 1, probs)
+
+    def test_unrelated_headings_do_not_fire(self):
+        self.assertEqual(decisions_problems(decisions_doc(decision(1), "## Decision list\n\ntext\n")), [])
+        self.assertEqual(ai_log_problems(log_doc(log_entry(1), "### 2026 plans\n\ntext\n")), [])
+
+    def test_correct_headings_do_not_fire(self):
+        self.assertEqual(decisions_problems(decisions_doc(decision(1), decision(2))), [])
+        self.assertEqual(ai_log_problems(log_doc(log_entry(1), log_entry(2))), [])
+
+
 class CommandLine(unittest.TestCase):
     def run_main(self, argv):
         out, err = io.StringIO(), io.StringIO()
@@ -387,8 +414,21 @@ class CommandLine(unittest.TestCase):
         self.assertEqual((code, out), (2, ""))
         self.assertTrue(err)
 
-    def test_exit_2_without_arguments(self):
-        self.assertEqual(self.run_main([])[0], 2)
+    def test_no_arguments_checks_current_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "DECISIONS.md").write_text(decisions_doc(decision(1)), encoding="utf-8")
+            (Path(tmp) / "AI-Agents.md").write_text(log_doc(log_entry(1)), encoding="utf-8")
+            here = Path.cwd()
+            try:
+                os.chdir(tmp)
+                self.assertEqual(self.run_main([])[0], 0)
+                (Path(tmp) / "AI-Agents.md").unlink()
+                self.assertEqual(self.run_main([])[0], 1)
+            finally:
+                os.chdir(here)
+
+    def test_exit_2_for_two_arguments(self):
+        self.assertEqual(self.run_main(["a", "b"])[0], 2)
 
     def test_cli_exit_1_on_broken_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
