@@ -1,6 +1,7 @@
 """Tests for the documentation gate. All inputs are built as strings here."""
 import contextlib
 import io
+import os
 import subprocess
 import sys
 import tempfile
@@ -413,8 +414,21 @@ class CommandLine(unittest.TestCase):
         self.assertEqual((code, out), (2, ""))
         self.assertTrue(err)
 
-    def test_exit_2_without_arguments(self):
-        self.assertEqual(self.run_main([])[0], 2)
+    def test_no_arguments_checks_current_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "DECISIONS.md").write_text(decisions_doc(decision(1)), encoding="utf-8")
+            (Path(tmp) / "AI-Agents.md").write_text(log_doc(log_entry(1)), encoding="utf-8")
+            here = Path.cwd()
+            try:
+                os.chdir(tmp)
+                self.assertEqual(self.run_main([])[0], 0)
+                (Path(tmp) / "AI-Agents.md").unlink()
+                self.assertEqual(self.run_main([])[0], 1)
+            finally:
+                os.chdir(here)
+
+    def test_exit_2_for_two_arguments(self):
+        self.assertEqual(self.run_main(["a", "b"])[0], 2)
 
     def test_cli_exit_1_on_broken_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
