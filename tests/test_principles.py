@@ -12,6 +12,7 @@ check is skipped with a visible reason.
 import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,7 +21,9 @@ PRINCIPLES = ROOT / "principles"
 STAGE_FILES = ("00-intake.md", "01-design.md", "02-plan.md", "03-build.md",
                "04-verify.md", "05-ship.md", "06-own.md", "07-retro.md")
 FIELDS = ("Rule", "Why (incident)", "How to check", "Enforced by")
-ENFORCERS = ("template", "check_docs", "contract hook", "CI", "human gate")
+ENFORCERS = ("template", "check_docs", "CI", "human gate", "contract hook (planned, v0.2)")
+EMPTY_STAGE = "awaiting a real incident"
+NO_INCIDENT = "no single measured incident"
 
 HEADING = re.compile(r"^### (P(\d+)\.(\d+)) (\S.*)$")
 FIELD = re.compile(r"^- \*\*(.+?):\*\*[ \t]*(.*)$")
@@ -53,7 +56,7 @@ def principles(text: str) -> list[dict]:
 
 def enforcer_problems(value: str) -> list[str]:
     """Kinds in an 'Enforced by' value that are not one of the five allowed kinds."""
-    parts = [p.strip() for p in re.split(r"\s*(?:\+|,| and )\s*", value.rstrip("."))]
+    parts = [p.strip() for p in value.rstrip(".").split("+")]
     return [p for p in parts if p not in ENFORCERS]
 
 
@@ -61,6 +64,19 @@ def forbidden_hits(text: str, names: list[str]) -> list[str]:
     """Names (case-insensitive) that occur anywhere in the text."""
     low = text.lower()
     return [n for n in names if n and n.lower() in low]
+
+
+def forbidden_in_tracked_files(root: Path, names: list[str]) -> list[str]:
+    """'file: name' for every name found in a file that git tracks under root."""
+    files = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True,
+                           check=True).stdout.decode("utf-8").split("\0")
+    hits = []
+    for rel in filter(None, files):
+        path = root / rel
+        if path.is_file():
+            text = path.read_bytes().decode("utf-8", errors="replace")
+            hits += [f"{rel}: {n}" for n in forbidden_hits(text, names)]
+    return hits
 
 
 class PrincipleFormatTests(unittest.TestCase):
@@ -72,9 +88,12 @@ class PrincipleFormatTests(unittest.TestCase):
     def test_principles_format(self):
         for name in STAGE_FILES:
             stage = int(name[:2])
-            items = principles(read(PRINCIPLES / name))
+            text = read(PRINCIPLES / name)
+            items = principles(text)
             with self.subTest(file=name):
-                self.assertGreater(len(items), 0, f"{name}: no principles")
+                if not items:
+                    self.assertIn(EMPTY_STAGE, text,
+                                  f"{name}: a stage without principles must say it is {EMPTY_STAGE}")
                 self.assertEqual([p["n"] for p in items], list(range(1, len(items) + 1)),
                                  f"{name}: ids not contiguous from 1")
             for p in items:
@@ -84,6 +103,9 @@ class PrincipleFormatTests(unittest.TestCase):
                                      f"{name}:{p['line']}: fields must be {FIELDS}")
                     for field, value in p["fields"]:
                         self.assertTrue(value, f"{name}:{p['line']}: {field} is blank")
+                    why = dict(p["fields"]).get("Why (incident)", "")
+                    self.assertNotIn(NO_INCIDENT, why.lower(),
+                                     f"{p['id']}: a principle needs a real incident")
                     rule = dict(p["fields"]).get("Rule", "")
                     self.assertTrue(rule.endswith("."), f"{p['id']}: Rule must end with a period")
                     self.assertNotIn(". ", rule, f"{p['id']}: Rule must be one sentence")
@@ -111,8 +133,9 @@ class HelperTests(unittest.TestCase):
 
     def test_enforcer_kinds(self):
         self.assertEqual(enforcer_problems("template + check_docs"), [])
-        self.assertEqual(enforcer_problems("human gate"), [])
+        self.assertEqual(enforcer_problems("check_docs + contract hook (planned, v0.2)"), [])
         self.assertEqual(enforcer_problems("process"), ["process"])
+        self.assertEqual(enforcer_problems("contract hook"), ["contract hook"])
 
     def test_forbidden_hits_fire_case_insensitively(self):
         self.assertEqual(forbidden_hits("Built for ACMECORP.", ["AcmeCorp"]), ["AcmeCorp"])
@@ -130,16 +153,21 @@ class ForbiddenNamesTests(unittest.TestCase):
         names = [n.strip() for n in raw.split(",") if n.strip()]
         if not names:
             self.skipTest("ACP_FORBIDDEN_NAMES is not set: the private-name scan did not run")
-        files = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True,
-                               check=True).stdout.decode("utf-8").split("\0")
-        hits = []
-        for rel in filter(None, files):
-            path = ROOT / rel
-            if not path.is_file():
-                continue
-            text = path.read_bytes().decode("utf-8", errors="replace")
-            hits += [f"{rel}: {n}" for n in forbidden_hits(text, names)]
-        self.assertEqual(hits, [], "private names found in tracked files")
+        self.assertEqual(forbidden_in_tracked_files(ROOT, names), [],
+                         "private names found in tracked files")
+
+    def test_scan_fails_on_a_tracked_probe_name(self):
+        """The scan must fire on a tracked file and ignore untracked ones (probe name, not a real one)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "tracked.md").write_text("Built for ProbeCorp.\n", encoding="utf-8")
+            (root / "untracked.md").write_text("ProbeCorp again.\n", encoding="utf-8")
+            (root / "clean.md").write_text("Nothing to see.\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.md", "clean.md"], cwd=root, check=True)
+            self.assertEqual(forbidden_in_tracked_files(root, ["probecorp"]),
+                             ["tracked.md: probecorp"])
+            self.assertEqual(forbidden_in_tracked_files(root, ["absentname"]), [])
 
 
 if __name__ == "__main__":
