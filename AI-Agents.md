@@ -41,3 +41,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** All of it.
 - **What I changed or rejected, and why:** None: I have not reviewed the example wording yet; the owner reviews it at the pull request.
 - **Where the AI was wrong, and how I noticed:** None found so far: the first run of the gate on the three templates was clean, so no correction was needed; the examples have not yet had an independent review.
+
+### 6. Writing the principles (2026-11-06)
+
+- **Prompt (or summary of it):** Write the principles as eight stage files and an index, one fixed four-field format per principle, telling every lesson only as a lesson from projects built so far, with a test written first.
+- **What the AI produced:** A test file committed first (red: 9 failures and 11 errors because the files were missing, the name scan skipped), then 40 principles in eight files and an index with the five enforcement kinds. The suite then passed (60 tests), the gate reported no problems, and the private-name scan passed with the owner's list set and was shown to fail with a probe name. Decision D8 and this entry.
+- **What I kept:** None: I have not reviewed the wording yet; the owner reviews it at the pull request.
+- **What I changed or rejected, and why:** None: no change made yet; the owner's review at the pull request decides.
+- **Where the AI was wrong, and how I noticed:** The source notes enforced several rules by "process" or "review", which the format does not allow; the AI mapped them to a human gate and wrote "No single measured incident" for 16 principles whose notes had no incident, instead of inventing one. It also briefly created a stray empty file outside the repository with a mistyped shell command, noticed it from the hung command and deleted it.
