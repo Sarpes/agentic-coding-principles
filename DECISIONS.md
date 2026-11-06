@@ -42,6 +42,26 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** The two copies can drift apart. This is mitigated because both are tested against the same field lists.
 - **What would make you change it:** When v0.2 packages the checker, the hook should import it.
 
+### D5. CLI exit codes 0, 1, 2 and plain-text output
+
+- **Context:** The documentation gate runs in a terminal, in CI and, later, from a hook, so callers need a result they can branch on and a message a person can act on.
+- **Options considered:** (a) exit 0 for pass, 1 for problems, 2 for usage errors, with one `FILE:LINE: message` line per problem; (b) the same codes with JSON output; (c) exit 1 for every failure.
+- **Chosen:** (a) three exit codes and `FILE:LINE: message` lines.
+- **Why:** The `FILE:LINE: message` form is the common compiler format, which editors and CI log viewers already turn into clickable links. Separating exit 1 (the documents are wrong) from exit 2 (the command was misused) stops a typing mistake from looking like a documentation failure.
+- **Rejected:** (b) JSON output, because nothing consumes it yet and it is harder to read in a terminal; (c) a single failure code, because it hides the difference between a bad document and a bad command.
+- **Cost / trade-off:** A program that wants structured results must parse text, or import the functions, which return `Problem` tuples.
+- **What would make you change it:** If a tool needs machine-readable output, add a `--json` option while keeping the default text format.
+
+### D6. Fenced code blocks are ignored by blanking their lines
+
+- **Context:** Templates and principles show example entries inside fenced code blocks. Those examples must not count as real entries, fields or table rows, and a reported line number must still point at the right line of the original file.
+- **Options considered:** (a) blank each line of a fenced block and keep the line count; (b) remove the blocks from the text before parsing; (c) parse the Markdown structure with a library.
+- **Chosen:** (a) blanking the lines.
+- **Why:** The text keeps exactly the same number of lines, so every problem carries the true line number of the original file. It needs only a few lines of standard-library code.
+- **Rejected:** (b) removing the blocks, because every line after a block would shift and the reported numbers would be wrong; (c) a Markdown library, because it breaks the standard-library-only rule (D2).
+- **Cost / trade-off:** Only fences written with three backticks are recognised; a fence written with tildes is read as ordinary text.
+- **What would make you change it:** If a document in this repository starts using tilde fences, the fence pattern must be extended.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

@@ -25,3 +25,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The v0.1 scope with the guard hook deferred (D1, D4).
 - **What I changed or rejected, and why:** I removed every description of the source projects; incidents read only as lessons from projects built so far (D3).
 - **Where the AI was wrong, and how I noticed:** The first plan would have written the list of private names into a public test file, and would have pushed a deliberately broken DECISIONS.md to prove CI can fail, which the new contract refuses. Both were caught in the AI's self-review of the plan.
+
+### 4. Writing the documentation gate (2026-11-06)
+
+- **Prompt (or summary of it):** Implement the documentation gate test-first: pure functions for the decision log, the AI log and the requirements table, plus a command-line interface with exit codes, following the field lists of the existing contract.
+- **What the AI produced:** 50 tests committed first (red: the module did not exist), then `checks/check_docs.py`; the first full run passed all 50. Two decision records (D5, D6) and this entry.
+- **What I kept:** All of it.
+- **What I changed or rejected, and why:** I made fenced code blocks blank their lines instead of being removed, so problem line numbers match the original file (D6).
+- **Where the AI was wrong, and how I noticed:** The first draft of the implementation contained a leftover dead expression in the return of the decision check, and one test computed a line number with a convoluted expression. Both were found on re-reading the code before the final run, not by a failing test.
