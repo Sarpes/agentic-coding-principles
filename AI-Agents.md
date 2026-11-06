@@ -57,3 +57,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** All of it.
 - **What I changed or rejected, and why:** None: I have not reviewed the README wording yet; the owner reviews it at the pull request. The proof that the gate can fail is the existing test `test_cli_exit_1_on_broken_repo`, so no broken file is stored in the repository.
 - **Where the AI was wrong, and how I noticed:** None found so far: the CI jobs have not run yet, so the matrix is untested on the real runners and the README claim that all four pass rests on the pull request's check results.
+
+### 8. Final review of v0.1 and its fix wave (2026-11-06)
+
+- **Prompt (or summary of it):** Review the finished v0.1 as a whole against the design and fix every finding: four must-fix items and a set of public-wording changes.
+- **What the AI produced:** The four must-fix findings. First, the gate skipped misformed entry headings such as `### D3 Title` or `## 3.`, so those entries were never checked. Second, running the gate with no argument returned exit 2, against the design. Third, the README's "use it in a new project" steps did not copy the gate. Fourth, the pre-commit secret gate had no test. The fix wave added tests first (red: 9 failures, then 1 failure, then a mutated gate that failed the new subprocess test), then the changes; D10 and this entry record it.
+- **What I kept:** All four fixes and the neutral wording changes. I also corrected entry 7: it said the CI jobs had not run yet, but CI later ran green on 4 of 4 jobs (run 42291444559), so that entry's claim was out of date.
+- **What I changed or rejected, and why:** I ruled that the no-argument default is the current directory (D10) rather than keeping exit 2, because the design is binding; I also ruled that public files carry no owner-specific phrasing.
+- **Where the AI was wrong, and how I noticed:** The gate's earlier tests locked in the wrong exit code for no arguments, so a passing suite hid a design violation; the whole-repository review against the design found it, not a failing test. The first pattern for AI-log headings would also have flagged a heading such as "### 2026 plans"; I noticed it while writing the test for unrelated headings, before the first run.

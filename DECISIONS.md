@@ -92,6 +92,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Four jobs run per push, and a problem specific to macOS or to Python 3.12 would not be caught. One test (the private-name scan) is skipped in CI because it needs a local environment variable.
 - **What would make you change it:** A user report of a failure on macOS or on another Python version adds that cell to the matrix.
 
+### D10. No argument means the current directory
+
+- **Context:** The design (section 8) says the gate takes `[REPO_DIR]`, defaulting to the current directory. The first implementation returned exit 2 when no argument was given, and a test locked that in.
+- **Options considered:** (a) keep exit 2 for no argument and require a folder; (b) default to the current directory; exit 2 only for more than one argument or a path that is not a directory.
+- **Chosen:** (b).
+- **Why:** The design is binding, and a new project runs the gate from its root, so `python checks/check_docs.py` with no argument is the shortest correct call and matches how CI and the README use it.
+- **Rejected:** (a) exit 2 for no argument, because it contradicted the design and forced users to type a `.` that carries no information.
+- **Cost / trade-off:** Running the gate in the wrong directory now reports "file is missing" problems (exit 1) instead of a usage error.
+- **What would make you change it:** A report that people run the gate from the wrong folder and are confused by the output would bring back an explicit argument or a clearer message for a folder that has neither log.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
