@@ -72,15 +72,15 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** The example must be replaced, and a user who forgets keeps a neutral example entry in their log. The gate cannot tell an example from a real entry. Format examples inside comments must not use heading or field syntax, because the gate does not skip comments.
 - **What would make you change it:** If users keep the example entries in real projects, mark the example with a visible tag and make the gate warn about it.
 
-### D8. Principles in a fixed four-field format with five enforcement kinds
+### D8. Principles in a fixed four-field format, each backed by a real incident
 
-- **Context:** The principles must be readable by someone who has never seen the source projects, checkable by a test, and honest about how each rule is enforced.
-- **Options considered:** (a) free prose per stage; (b) a fixed format per principle: a heading `P<stage>.<n> <title>` and four fields (Rule, Why (incident), How to check, Enforced by), with "Enforced by" limited to template, check_docs, contract hook, CI and human gate; (c) the fixed format with a free-text "Enforced by".
-- **Chosen:** (b) the fixed format with five enforcement kinds, checked by `tests/test_principles.py`.
-- **Why:** A fixed format lets a test check every principle (four fields, contiguous ids, every id in the index), and a closed list of kinds stops vague answers such as "process" that name no one responsible. Each kind is defined in `principles/README.md`.
-- **Rejected:** (a) free prose, because a rule hidden in a paragraph cannot be checked and readers skim past it; (c) free-text enforcement, because the source notes used "process" and "review", which do not say who or what refuses a breach.
-- **Cost / trade-off:** Some rules fit a kind only loosely; 16 of 40 principles have no single measured incident and say so, and many rest on a human gate, which is the weakest kind.
-- **What would make you change it:** If a rule needs an enforcement that none of the five kinds describes, add a kind with a definition and a test instead of stretching an existing one.
+- **Context:** The principles must be readable by someone who has never seen the source projects, checkable by a test, and honest about why each rule exists and how it is enforced.
+- **Options considered:** (a) free prose per stage; (b) a fixed format per principle: a heading `P<stage>.<n> <title>` and four fields (Rule, Why (incident), How to check, Enforced by), "Enforced by" limited to template, check_docs, CI, human gate and "contract hook (planned, v0.2)", and a principle only where a real incident exists; (c) the fixed format with a free-text "Enforced by"; (d) the fixed format, also keeping rules that have only a rationale.
+- **Chosen:** (b), checked by `tests/test_principles.py`: 21 principles (stages 0 to 7: 3, 7, 0, 6, 1, 2, 1, 1). The test refuses a principle whose incident is missing and a stage without principles unless it says it awaits one.
+- **Why:** A fixed format lets a test check every principle (four fields, contiguous ids, every id in the index). A closed list of kinds stops vague answers such as "process", and it names only mechanisms that exist publicly in this repository; the private hook is marked as planned. Requiring an incident keeps the promise that every rule comes from a lesson, not from opinion.
+- **Rejected:** (a) free prose, because a rule hidden in a paragraph cannot be checked and readers skim past it; (c) free-text enforcement, because the source notes used "process" and "review", which do not say who or what refuses a breach; (d) rationale-only rules, because they are the opinions the framework exists to replace; the first draft had 16 of them out of 40.
+- **Cost / trade-off:** Useful rules without an incident are left out for now (listed under "Not done (and why)"), and stage 2 has no principle yet. Most principles rest on a human gate, which is the weakest kind.
+- **What would make you change it:** A real incident for a candidate rule brings it in; a rule that needs an enforcement none of the kinds describes gets a new kind with a definition and a test instead of stretching an existing one.
 
 ## Assumptions
 
@@ -94,3 +94,20 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - Skill packaging: later, by the owner's choice.
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
+- Write a requirements matrix on day one: candidate principle awaiting a real incident (the requirement check that came late still passed).
+- Keep a glossary of domain terms and a diagram of how the parts talk: candidate principle awaiting a real incident.
+- Compute dates and rules in deterministic code, not in a language model: candidate principle awaiting a real incident (only a benefit is recorded).
+- Give every task the same definition of done: candidate principle awaiting a real incident.
+- Run the full suite after every merge and settle every "cannot verify" by reading the code: candidate principle awaiting a real incident.
+- Give parallel working copies separate container project names: candidate principle awaiting a real incident.
+- Have a human check every evaluation label and report raw counts: candidate principle awaiting a real incident.
+- Keep raw sensitive data out of test fixtures: candidate principle awaiting a real incident.
+- Record the intent before every write to an external service, with an idempotency key: candidate principle awaiting a real incident (only a result is recorded).
+- Approve every paid call first and record its cost: candidate principle awaiting a real incident.
+- Record every live run in RESULTS.md: candidate principle awaiting a real incident.
+- Start a fresh clone with the documented commands only: candidate principle awaiting a real incident.
+- Keep keys out of chat, logs and git: candidate principle awaiting a real incident.
+- Merge with merge commits and never squash: candidate principle awaiting a real incident.
+- Describe every pull request with goal, choices, measurements and how to check: candidate principle awaiting a real incident.
+- Log AI usage while working, five fields per entry: candidate principle awaiting a real incident.
+- End with a list of defects caught by review and a reflection: candidate principle awaiting a real incident.
