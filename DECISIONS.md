@@ -5,9 +5,9 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 ### D1. Standalone public repository
 
 - **Context:** The framework (rules, stage gates, templates, a documentation gate) needs a home that anyone can clone, read and reuse.
-- **Options considered:** (a) put it inside the owner's private, machine-specific contracts repository; (b) extend the owner's existing public repo-setup skill; (c) create a new standalone public repository.
+- **Options considered:** (a) put it inside a private repository of the owner's own rules; (b) extend the owner's existing public repo-setup skill; (c) create a new standalone public repository.
 - **Chosen:** (c) a new standalone public repository.
-- **Why:** The private contracts repository holds machine paths and private project rules and cannot be published without a long clean-up. The framework is broader than repo setup. A standalone repository can become a skill later.
+- **Why:** That private repository holds machine-specific paths and private project rules and cannot be published without a long clean-up. The framework is broader than repo setup. A standalone repository can become a skill later.
 - **Rejected:** (a) it is private and bound to one machine; (b) it is the wrong scope, because the framework covers a whole project life cycle and not only repository setup.
 - **Cost / trade-off:** The rule logic exists in two places for now (see D4).
 - **What would make you change it:** If a skill version replaces this repository, this repository becomes its source or is retired.
@@ -32,15 +32,15 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Incidents read less concretely.
 - **What would make you change it:** If a project owner agrees to be named.
 
-### D4. Rule logic duplicated with the owner's private hook for now
+### D4. Rule logic duplicated with a private hook for now
 
-- **Context:** The owner's machine already enforces the same documentation format through a private tool-call hook, while this repository ships its own public checker.
-- **Options considered:** the private hook imports the public checker; keep two copies.
+- **Context:** The owner already enforces the same documentation format through their own tool-call hook, which is not public, while this repository ships its own public checker.
+- **Options considered:** the hook imports the public checker; keep two copies.
 - **Chosen:** two copies in v0.1.
-- **Why:** Making a private machine tool depend on a public repository's file layout adds a coupling risk with no user benefit yet.
-- **Rejected:** importing the public checker into the private hook now.
+- **Why:** Making a private tool depend on a public repository's file layout adds a coupling risk with no user benefit yet.
+- **Rejected:** importing the public checker into the hook now.
 - **Cost / trade-off:** The two copies can drift apart. This is mitigated because both are tested against the same field lists.
-- **What would make you change it:** When v0.2 packages the checker, the private hook should import it.
+- **What would make you change it:** When v0.2 packages the checker, the hook should import it.
 
 ## Assumptions
 
@@ -50,7 +50,7 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 
 ## Not done (and why)
 
-- Tool-call guard hook: planned for v0.2; the owner's machine already has one.
+- Tool-call guard hook: planned for v0.2; the owner already has one (not public).
 - Skill packaging: later, by the owner's choice.
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.

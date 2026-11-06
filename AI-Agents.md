@@ -4,15 +4,15 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 
 ### 1. Deriving rules from a finished project (2026-11-06)
 
-- **Prompt (or summary of it):** Scan a finished project's repository for practices worth turning into enforced rules (decision log format, AI usage log) and list them.
+- **Prompt (or summary of it):** Scan a finished past project's repository for practices worth turning into enforced rules (decision log format, AI usage log) and list them.
 - **What the AI produced:** 27 candidate rules in four groups (documents, process, engineering, security), each with its source and whether a tool-call detector could enforce it; then 14 additions covering the whole life cycle, from intake to retrospective.
 - **What I kept:** All of it, and the 8-stage framework.
 - **What I changed or rejected, and why:** I set the goal wider: a structure for any agent-built project, not only documents.
-- **Where the AI was wrong, and how I noticed:** Its first proposal conflicted with my existing global decision-record format. The AI flagged the conflict itself, and I chose the new format for new projects.
+- **Where the AI was wrong, and how I noticed:** Its first proposal conflicted with my earlier decision-record format. The AI flagged the conflict itself, and I chose the new format for new projects.
 
-### 2. Enforcing the documentation format on my machine (2026-11-06)
+### 2. Enforcing the documentation format with a hook (2026-11-06)
 
-- **Prompt (or summary of it):** Add the decision log rule (seven fields) and the AI log rule to my machine-wide contracts so they work now.
+- **Prompt (or summary of it):** Add the decision log rule (seven fields) and the AI log rule to a contract enforced by a hook so they work now.
 - **What the AI produced:** A contract with three blocking rules, tests written first (20 failing), then the rules. Result: 86 of 86 tests passing; 0 false alarms when replayed over 11,049 past tool calls; a live check in which an incomplete write and an edit deleting a field were both refused.
 - **What I kept:** All of it.
 - **What I changed or rejected, and why:** I moved the start date of the rule one day earlier so that this repository is covered by it.
