@@ -62,6 +62,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Only fences written with three backticks are recognised; a fence written with tildes is read as ordinary text.
 - **What would make you change it:** If a document in this repository starts using tilde fences, the fence pattern must be extended.
 
+### D7. Templates carry one worked example and guidance in HTML comments
+
+- **Context:** The repository ships templates for the decision log, the AI log, the requirements table and five other documents. A new user must see what a good entry looks like, and the documentation gate must accept the templates as shipped.
+- **Options considered:** (a) blank skeletons with empty fields; (b) one worked example entry plus short guidance in HTML comments; (c) guidance in a separate document only.
+- **Chosen:** (b) a worked example and HTML-comment guidance in each template.
+- **Why:** A filled example teaches the expected depth faster than a description. HTML comments do not render, so the guidance disappears from the finished document. A test (`tests/test_templates.py`) runs the three gated templates through the gate: 0 problems.
+- **Rejected:** (a) blank skeletons, because they teach nothing and fail the gate (empty fields); (c) a separate guide, because people copy the template and never open the guide.
+- **Cost / trade-off:** The example must be replaced, and a user who forgets keeps a neutral example entry in their log. The gate cannot tell an example from a real entry. Format examples inside comments must not use heading or field syntax, because the gate does not skip comments.
+- **What would make you change it:** If users keep the example entries in real projects, mark the example with a visible tag and make the gate warn about it.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

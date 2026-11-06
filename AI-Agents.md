@@ -33,3 +33,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** All of it.
 - **What I changed or rejected, and why:** I made fenced code blocks blank their lines instead of being removed, so problem line numbers match the original file (D6).
 - **Where the AI was wrong, and how I noticed:** The first draft of the implementation contained a leftover dead expression in the return of the decision check, and one test computed a line number with a convoluted expression. Both were found on re-reading the code before the final run, not by a failing test.
+
+### 5. Writing the templates (2026-11-06)
+
+- **Prompt (or summary of it):** Write eight templates (decision log, AI log, requirements table, build ledger, results, handover, glossary, pull request), each with one worked example and guidance in HTML comments; the three gated ones must pass the documentation gate.
+- **What the AI produced:** A test file written first (red: 11 errors, one per missing template), then the eight templates; the full suite then passed (52 tests) and the gate reported no problems. Decision D7 and this entry.
+- **What I kept:** All of it.
+- **What I changed or rejected, and why:** None: I have not reviewed the example wording yet; the owner reviews it at the pull request.
+- **Where the AI was wrong, and how I noticed:** None found so far: the first run of the gate on the three templates was clean, so no correction was needed; the examples have not yet had an independent review.
