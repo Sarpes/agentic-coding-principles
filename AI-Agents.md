@@ -41,3 +41,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** All of it.
 - **What I changed or rejected, and why:** None: I have not reviewed the example wording yet; the owner reviews it at the pull request.
 - **Where the AI was wrong, and how I noticed:** None found so far: the first run of the gate on the three templates was clean, so no correction was needed; the examples have not yet had an independent review.
+
+### 6. Writing the principles (2026-11-06)
+
+- **Prompt (or summary of it):** Write the principles as eight stage files and an index, one fixed four-field format per principle, telling every lesson only as a lesson from projects built so far, with a test written first.
+- **What the AI produced:** A test file committed first (red: 9 failures and 11 errors because the files were missing, the name scan skipped), then a first draft of 40 principles in eight files and an index. After two review rounds: 20 principles (stages 0 to 7: 3, 7, 0, 5, 1, 2, 1, 1), two rules folded into a neighbour about the same document, 18 rules moved to "Not done (and why)" as candidates awaiting a real incident, and tests that refuse a principle without an incident and prove the private-name scan fires on a probe repository. Result: 61 tests pass, the gate reports no problems. Decision D8 and this entry.
+- **What I kept:** The four-field format, the stage files and the index; the 20 principles that have a real incident behind them.
+- **What I changed or rejected, and why:** The review rejected the 16 principles that only gave a rationale, because the framework promises a lesson behind every rule; it limited "Enforced by" to mechanisms that exist publicly, so the private hook now reads "contract hook (planned, v0.2)"; it asked for incidents that state what happened instead of a benefit or a result, more general wording, and checks that name a file or a command.
+- **Where the AI was wrong, and how I noticed:** The first draft kept 16 rules without an incident, claimed "contract hook" and CI for rules that no public mechanism enforces, and left wording that hinted at the source domain; a separate reviewer found all of these. The AI also briefly created a stray empty file outside the repository with a mistyped shell command, noticed it from the hung command and deleted it.
