@@ -6,7 +6,7 @@ Intake turns a brief into something the build can be checked against. A requirem
 
 ### P0.1 Take every fact from its source and write dates as absolute dates
 - **Rule:** Write each date, quota and price with the source it came from, and write dates as calendar dates instead of "in two weeks".
-- **Why (incident):** A deadline was first estimated from memory and came out three days too late; the real date was in the invitation message all along.
+- **Why (incident):** A deadline was first estimated from memory and came out three days too late; the real date was in the original message all along.
 - **How to check:** Read the intake notes: does every date, quota and price name its source, and is every date a calendar date?
 - **Enforced by:** human gate
 
