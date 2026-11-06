@@ -26,13 +26,7 @@
 - **How to check:** Remove the protection on a scratch branch and run the tests: does at least one test fail?
 - **Enforced by:** human gate
 
-### P3.5 Build a walking skeleton with the real integrations early
-- **Rule:** Run one end-to-end pass through every real external service within the first days of the build.
-- **Why (incident):** In one project the first real end-to-end run came last; it is the only test that exercises all integrations together, so problems between them could surface only at the end.
-- **How to check:** Read `RESULTS.md`: is the first end-to-end run with real services dated within the first days of the build?
-- **Enforced by:** human gate
-
-### P3.6 Save state at every task boundary and write a dated handover at session end
+### P3.5 Save state at every task boundary and write a dated handover at session end
 - **Rule:** Update the build ledger and commit at the end of every task, and write a dated handover document when a session ends.
 - **Why (incident):** In one project work was cut off by usage limits three times (measured at the time) and resumed each time without loss, because the last task boundary was always committed.
 - **How to check:** Run `git status` at a task boundary: is the working tree clean, and is there a handover file dated today?

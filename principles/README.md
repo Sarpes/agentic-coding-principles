@@ -24,10 +24,10 @@ A project built with an AI coding agent moves through eight stages. Each stage e
 | [0 Intake](00-intake.md) | Requirements matrix exists; facts (dates, quotas, prices) carry their source | P0.1 · P0.2 · P0.3 |
 | [1 Design](01-design.md) | Written design approved by the human; decisions logged with rejected options | P1.1 · P1.2 · P1.3 · P1.4 · P1.5 · P1.6 · P1.7 |
 | [2 Plan](02-plan.md) | Every task has a definition of done | none yet (awaiting a real incident) |
-| [3 Build](03-build.md) | Each task red-first, green, reviewed by a separate reviewer | P3.1 · P3.2 · P3.3 · P3.4 · P3.5 · P3.6 |
+| [3 Build](03-build.md) | Each task red-first, green, reviewed by a separate reviewer | P3.1 · P3.2 · P3.3 · P3.4 · P3.5 |
 | [4 Verify](04-verify.md) | Real integrations run end to end; a fresh clone starts with the documented commands | P4.1 |
 | [5 Ship](05-ship.md) | Secret scan by value; PR shows goal, choices, measurements, how to check | P5.1 · P5.2 |
 | [6 Own](06-own.md) | The human can explain every module and has changed at least one by hand | P6.1 |
 | [7 Retro](07-retro.md) | Every "where the AI was wrong" entry became a rule, a template change or a recorded "won't fix" | P7.1 |
 
-21 principles in all.
+20 principles in all.
