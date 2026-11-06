@@ -1,7 +1,7 @@
 """Documentation gate: checks DECISIONS.md, AI-Agents.md and (if present) REQUIREMENTS.md.
 
-Usage: python checks/check_docs.py <repository folder>
-Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 usage error.
+Usage: python checks/check_docs.py [repository folder]   (default: the current directory)
+Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 usage error (more than one argument, or not a directory).
 Line numbers are 1-based lines of the original file; 0 means the problem concerns the whole file.
 """
 from __future__ import annotations
@@ -214,12 +214,12 @@ def check_repo(root: Path) -> list[Problem]:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
-        print("usage: check_docs.py <repository folder>", file=sys.stderr)
+    if len(args) > 1:
+        print("usage: check_docs.py [repository folder]", file=sys.stderr)
         return 2
-    root = Path(args[0])
+    root = Path(args[0]) if args else Path.cwd()
     if not root.is_dir():
-        print(f"check_docs.py: not a directory: {args[0]}", file=sys.stderr)
+        print(f"check_docs.py: not a directory: {root}", file=sys.stderr)
         return 2
     problems = check_repo(root)
     for p in problems:
