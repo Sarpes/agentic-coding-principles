@@ -71,7 +71,7 @@ def defined_kinds(index: str) -> list[str]:
 
 def wrong_counts(text: str, actual: int) -> list[str]:
     """Every 'N principles' in the text whose N is not the actual total."""
-    return []
+    return [f"{n} principles" for n in re.findall(r"\b(\d+) principles\b", text) if int(n) != actual]
 
 
 def forbidden_hits(text: str, names: list[str]) -> list[str]:

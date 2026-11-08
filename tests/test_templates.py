@@ -26,14 +26,23 @@ def read(name: str) -> str:
     return (TEMPLATES / name).read_text(encoding="utf-8-sig")
 
 
+def visible(text: str) -> str:
+    """The text without its HTML comments, which hold guidance and not content."""
+    return re.sub(r"<!--.*?-->", "", text, flags=re.S)
+
+
 def missing_sections(text: str, required) -> list[str]:
     """Required `## ` sections absent from the text; a heading inside a comment does not count."""
-    return []
+    found = {heading for heading in re.findall(r"^## (.+?)\s*$", visible(text), re.M)}
+    return [section for section in required if section not in found]
 
 
 def glossary_problems(text: str) -> list[str]:
     """A glossary needs at least one `- **term:** meaning` line, with the terms in alphabetical order."""
-    return []
+    terms = [term.casefold() for term in re.findall(r"^- \*\*(.+?):\*\*[ \t]*\S", visible(text), re.M)]
+    if not terms:
+        return ["no `- **term:** meaning` entry"]
+    return [] if terms == sorted(terms) else ["terms are not in alphabetical order"]
 
 
 class HelperTests(unittest.TestCase):
