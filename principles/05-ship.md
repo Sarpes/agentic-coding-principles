@@ -12,4 +12,4 @@
 - **Rule:** Add checks to the stock secret gate for the cases it misses, and prove each with a commit that it refuses.
 - **Why (incident):** On a throwaway repository, an unquoted `NAME_API_KEY=` assignment and a file named `*.env` both passed a stock secret gate unnoticed.
 - **How to check:** With the pre-commit hook in `.githooks/` enabled, stage a fake unquoted key and a fake `*.env` file on a throwaway branch: is each commit refused?
-- **Enforced by:** human gate + contract hook (planned, v0.2)
+- **Enforced by:** human gate + pre-commit hook

@@ -384,6 +384,105 @@ class MisformedHeadings(unittest.TestCase):
         self.assertEqual(ai_log_problems(log_doc(log_entry(1), log_entry(2))), [])
 
 
+class FenceRules(unittest.TestCase):
+    LONG = "`" * 4
+
+    def test_unclosed_fence_reported_at_its_opening_line(self):
+        for rule, text in ((decisions_problems, decisions_doc(decision(1)) + f"\n{FENCE}\nnever closed\n"),
+                           (ai_log_problems, log_doc(log_entry(1)) + f"\n{FENCE}\nnever closed\n"),
+                           (requirements_problems, req_table(RequirementsRules.GOOD) + f"\n{FENCE}\nnever closed\n")):
+            with self.subTest(rule=rule.__name__):
+                hits = [p for p in rule(text) if "unclosed" in p.message]
+                self.assertEqual([p.line for p in hits], [line_of(text, FENCE)])
+
+    def test_unclosed_fence_is_reported_when_it_hides_the_whole_table(self):
+        text = f"{FENCE}\n" + req_table(RequirementsRules.GOOD)
+        self.assertTrue(any("unclosed" in p.message and p.line == 1 for p in requirements_problems(text)))
+
+    def test_closed_fence_is_not_reported(self):
+        text = decisions_doc(decision(1)) + f"\n{FENCE}python\nshown\n{FENCE}\n"
+        self.assertEqual(decisions_problems(text), [])
+
+    def test_longer_fence_can_show_a_shorter_fence(self):
+        example = f"{self.LONG}\n{FENCE}\n### D9. Example only\n{FENCE}\n{self.LONG}\n"
+        self.assertEqual(decisions_problems(decisions_doc(decision(1), example)), [])
+
+    def test_closing_fence_may_be_longer_than_the_opening_one(self):
+        example = f"{FENCE}\n### D9. Example only\n{self.LONG}\n"
+        self.assertEqual(decisions_problems(decisions_doc(decision(1), example)), [])
+
+    def test_fence_with_trailing_text_does_not_close(self):
+        example = f"{FENCE}\n{FENCE} not a closing fence\n### D9. Example only\n{FENCE}\n"
+        self.assertEqual(decisions_problems(decisions_doc(decision(1), example)), [])
+
+    def test_backticks_inside_a_line_do_not_open_a_fence(self):
+        text = decisions_doc(f"{FENCE}inline{FENCE} is not a fence\n", decision(1, skip=("Why",)))
+        probs = decisions_problems(text)
+        self.assertEqual(len(probs), 1)
+        self.assertIn("- **Why:**", probs[0].message)
+
+
+class ValueBelowLabel(unittest.TestCase):
+    @staticmethod
+    def nested(entry, label):
+        return entry.replace(f"- **{label}:** \n", f"- **{label}:**\n  - the reason, one level down\n")
+
+    def test_decision_value_on_the_next_line_is_named(self):
+        text = decisions_doc(self.nested(decision(1, override={"Why": ""}), "Why"))
+        probs = decisions_problems(text)
+        self.assertEqual(len(probs), 1)
+        self.assertEqual(probs[0].line, line_of(text, "the reason, one level down"))
+        self.assertIn("same line", probs[0].message)
+        self.assertIn("Why", probs[0].message)
+
+    def test_log_value_on_the_next_line_is_named(self):
+        text = log_doc(self.nested(log_entry(1, override={"What I kept": ""}), "What I kept"))
+        probs = ai_log_problems(text)
+        self.assertEqual(len(probs), 1)
+        self.assertIn("same line", probs[0].message)
+
+    def test_truly_empty_field_does_not_mention_the_next_line(self):
+        probs = decisions_problems(decisions_doc(decision(1, override={"Why": ""})))
+        self.assertEqual(len(probs), 1)
+        self.assertNotIn("same line", probs[0].message)
+
+    def test_filled_field_followed_by_a_nested_bullet_is_fine(self):
+        entry = decision(1).replace("- **Why:** text\n", "- **Why:** text\n  - more detail\n")
+        self.assertEqual(decisions_problems(decisions_doc(entry)), [])
+
+
+class InvalidEncoding(unittest.TestCase):
+    GOOD = log_doc(log_entry(1)).encode("utf-8")
+    BROKEN = b"# Decisions\n\nbad byte: \xff here\n"
+
+    def check(self, decisions_bytes, log_bytes=GOOD):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "DECISIONS.md").write_bytes(decisions_bytes)
+            (Path(tmp) / "AI-Agents.md").write_bytes(log_bytes)
+            return check_repo(Path(tmp))
+
+    def test_reported_as_a_problem_at_the_line_of_the_bad_byte(self):
+        probs = self.check(self.BROKEN)
+        self.assertEqual([(p.file, p.line) for p in probs], [("DECISIONS.md", 3)])
+        self.assertIn("UTF-8", probs[0].message)
+
+    def test_line_is_true_after_a_byte_order_mark(self):
+        self.assertEqual([p.line for p in self.check(b"\xef\xbb\xbf" + self.BROKEN)], [3])
+
+    def test_the_other_file_is_still_checked(self):
+        probs = self.check(self.BROKEN, log_doc(log_entry(1, skip=("What I kept",))).encode("utf-8"))
+        self.assertEqual([p.file for p in probs], ["DECISIONS.md", "AI-Agents.md"])
+
+    def test_cli_exits_1_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "DECISIONS.md").write_bytes(self.BROKEN)
+            (Path(tmp) / "AI-Agents.md").write_bytes(self.GOOD)
+            done = subprocess.run([sys.executable, str(SCRIPT), tmp], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("DECISIONS.md:3:", done.stdout)
+        self.assertEqual(done.stderr, "")
+
+
 class CommandLine(unittest.TestCase):
     def run_main(self, argv):
         out, err = io.StringIO(), io.StringIO()

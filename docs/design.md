@@ -1,13 +1,13 @@
 # Design: Agentic Coding Principles (v0.1)
 
-Status: approved 2026-11-06 · Decision owner: the maintainer
+Status: approved 2026-11-06 · Decision owner: the owner
 
 ## 1. Intent and why
 
 A public, self-contained reference for building software with an AI coding agent (Claude Code) under strict, industry-standard rules: written decisions, stage gates, tests that prove the gates can fail, and an honest AI usage log. Every principle comes from a real incident in real projects, not from a generic best-practice list.
 
 Who it serves:
-- **Primary: the maintainer.** Every new project starts from this structure (templates, principles, the docs gate).
+- **Primary: the owner.** Every new project starts from this structure (templates, principles, the docs gate).
 - **Secondary: readers evaluating the work**, who open the repository and should see within two minutes that it is rule-driven and test-backed.
 
 Success: a new project can be carried end to end (intake → retro) with these principles; the repository applies them to itself; CI shows the docs gate green on every push and the tests show it can go red.
@@ -84,7 +84,7 @@ Each principle in `principles/NN-stage.md`:
 - **Rule:** one sentence, imperative.
 - **Why (incident):** what happened and its measured effect, as a lesson from projects built so far; no project, company or domain named.
 - **How to check:** a command, a file to read, or a question with a yes/no answer.
-- **Enforced by:** template | check_docs | tool-call hook | CI | human gate
+- **Enforced by:** template | check_docs | pre-commit hook | tool-call hook | CI | human gate
 ```
 
 Principle set (lessons from projects built so far, reviewed 06.11): intake E1-E3, B10; design B1-B3, E4, E5, A1-A2, A7-A8, C3; plan E6, A5; build B5-B9, C1-C2, C4-C5, E7-E9; verify A6, E10, E11; ship D1-D4, E12, A3-A4; own E13; retro E14. Wording is the builder's, within the format above. (superseded: see DECISIONS.md D8 and principles/README.md for the final set)
@@ -122,6 +122,6 @@ Decided by the owner: new standalone public repo, name, English deliverable, its
 
 Decided by the owner (06.11): incidents are described only as "lessons from projects built so far"; no project, company or case is named or described.
 
-My calls (to check): standard library and `unittest` only; the rule logic is duplicated between `check_docs.py` and the owner's own tool-call hook (not public) for now (recorded under Not done: the hook should later import the public checker).
+The builder's calls (to check): standard library and `unittest` only; the rule logic is duplicated between `check_docs.py` and the owner's own tool-call hook (not public) for now (recorded under Not done: the hook should later import the public checker).
 
 Left to the builder: principle wording, template guidance text, CI cosmetics.
