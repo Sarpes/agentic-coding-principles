@@ -767,7 +767,7 @@ class ArchitectureRules(GitCase):
     def test_missing_section_is_a_problem(self):
         self.assert_mentions(self.fm(doc(deps=[]), ["a.py"]), "File map")
 
-    def test_wrong_columns_are_a_problem(self):
+    def test_file_map_wrong_columns_are_a_problem(self):
         text = "## File map\n\n| File | Purpose |\n|---|---|\n| a.py | x |\n"
         self.assert_mentions(self.fm(text, ["a.py"]), "columns")
 
