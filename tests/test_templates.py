@@ -4,18 +4,32 @@ The five templates the gate does not read are checked here against the parts the
 guidance comments promise.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
 
 from checks.check_docs import ai_log_problems, decisions_problems, requirements_problems
 
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
+sys.path.insert(0, str(TEMPLATES.parent / "skills" / "agentic-principles" / "scripts"))
+from check_gates import (  # noqa: E402
+    EXAMPLE_MARKER,
+    attack_problems,
+    attack_rungs,
+    components,
+    dependency_problems,
+    file_map_problems,
+)
+from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a test: a check function)
+
 ALL = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "BUILD-LEDGER.md",
        "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md",
-       "STAGES.md", "OVERRIDES.md")
+       "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md")
 
 
 SECTIONS = {
+    "ARCHITECTURE.md": ("Diagram", "Components", "File map", "Tech stack", "Tests", "Complex problems",
+                        "Dependencies"),
     "BUILD-LEDGER.md": ("Method", "Rulings", "Deferred findings", "Reviews"),
     "RESULTS.md": ("Setup", "Outcome versus expected", "Observations", "How to reproduce"),
     "HANDOVER.md": ("Status", "Resume order", "Open items"),
@@ -86,6 +100,32 @@ class TemplateTests(unittest.TestCase):
                            ("REQUIREMENTS.md", requirements_problems)):
             with self.subTest(template=name):
                 self.assertEqual(rule(read(name), name), [])
+
+    def test_attacks_template_parses_and_only_the_example_marker_fails_it(self):
+        text = read("ATTACKS.md")
+        problems = attack_problems(text, "full")
+        self.assertGreaterEqual(len(problems), 1)
+        self.assertTrue(all(EXAMPLE_MARKER in p.message for p in problems), problems)
+        self.assertEqual(attack_problems(text.replace(EXAMPLE_MARKER, ""), "full"), [])
+        self.assertTrue(set(attack_rungs(text.replace(EXAMPLE_MARKER, ""))) <= {"ATK-1", "ATK-2", "ATK-3", "ATK-4", "ATK-5"})
+
+    def test_architecture_template_tables_have_the_columns_the_gate_reads(self):
+        text = read("ARCHITECTURE.md")
+        for header in ("| Component | What it does |", "| Path | What it does |",
+                       "| Part | 1 Written first | 2 Catches breakage | 3 Input range | 4 Real integration "
+                       "| 5 Deliberate failure |",
+                       "| Name | Version | Why it is here | What breaks without it |"):
+            with self.subTest(header=header):
+                self.assertIn(header, visible(text))
+
+    def test_architecture_template_examples_are_marked_and_fail_every_check(self):
+        text = read("ARCHITECTURE.md")
+        self.assertIn(EXAMPLE_MARKER, visible(text))
+        parts = components(text) | {"REQ-1", "ATK-1"}
+        self.assertTrue(components(text))
+        self.assertTrue(file_map_problems(text, ["not-in-the-map.txt"], {}))
+        self.assertTrue(dependency_problems(text, {"not-in-the-table": None}, [], {}))
+        self.assertTrue(tt_problems(text, "small", parts, {}, [], TEMPLATES, {}))
 
     def test_all_templates_exist_and_carry_guidance(self):
         for name in ALL:

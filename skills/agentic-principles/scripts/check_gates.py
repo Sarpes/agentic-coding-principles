@@ -695,6 +695,46 @@ def _is_date(value: str) -> bool:
     return bool(ISO_DATE.fullmatch(value))
 
 
+# ------------------------------------------------------ architecture and attacks
+# STUBS: signatures only, so that each test class fails on its own assertions. Replaced by the real code.
+
+def manifest_dependencies(root, tracked) -> tuple[dict, list]:
+    return {}, []
+
+
+def file_map_problems(text, tracked, overrides, file="ARCHITECTURE.md") -> list[Problem]:
+    return []
+
+
+def dependency_problems(text, deps, unreadable, overrides, file="ARCHITECTURE.md") -> list[Problem]:
+    return []
+
+
+def test_table_problems(text, size, parts, attack_rungs, tracked, root, overrides,
+                        file="ARCHITECTURE.md") -> list[Problem]:
+    return []
+
+
+def attack_problems(text, size, file="ATTACKS.md") -> list[Problem]:
+    return []
+
+
+def requirement_ids(text) -> set:
+    return set()
+
+
+def attack_rungs(text) -> dict:
+    return {}
+
+
+def components(text) -> set:
+    return set()
+
+
+def section_override(section_text, overrides, stage) -> bool:
+    return False
+
+
 # --------------------------------------------------------------------- command
 
 def _load(root: Path, name: str):
