@@ -8,6 +8,15 @@ Notes (for example the list of open overrides) go to stderr and never change the
 
 This script is copied alone into projects: it uses the standard library only and imports nothing from the
 repository it ships in. Git is run through the `git` command.
+
+Layout (one file on purpose, so it can be copied alone; search for the section banner):
+  text helpers      comment/fence blanking, table rows, UTF-8 decoding
+  git               tracked files, first commit of a file, ancestry
+  STAGES.md         parse_stages and its table parser
+  evidence          the REQUIRED table, evidence items, per-file content rules
+  stage checks      stage_problems: evidence, ordering, overrides, adoption
+  OVERRIDES.md      parse_overrides and override_problems
+  command           check_project and main
 """
 from __future__ import annotations
 
@@ -335,7 +344,8 @@ def read_evidence_file(root: Path, rel: str) -> str | None:
     path = root / rel
     if not path.is_file():
         return None
-    return normalise(path.read_bytes().decode("utf-8", "replace"))
+    text, problem = decode(path.read_bytes(), rel)
+    return None if problem else normalise(text)               # not UTF-8: reported by stage_problems, never judged
 
 
 def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str]) -> list[str]:
@@ -507,8 +517,13 @@ def _passed_problems(n, stages, row, root, tracked_set, tracked, first_commit, f
                                         "(write file:<path> or commit:<hash>)")]
     problems = [Problem(file, row.line, f"{row.name}: {message}") for message in shape_errors]
     for kind, value in items:
-        problems += [Problem(file, row.line, f"{row.name}: {message}")
-                     for message in evidence_item_problems(kind, value, root, tracked_set)]
+        found = evidence_item_problems(kind, value, root, tracked_set)
+        problems += [Problem(file, row.line, f"{row.name}: {message}") for message in found]
+        if kind == "file" and not found:                     # a usable file: its bytes must be UTF-8
+            rel = norm_path(value)
+            problem = decode((root / rel).read_bytes(), rel)[1]
+            if problem:
+                problems.append(problem)
     first = first_commit() if n == 3 else None
     problems += evidence_content_problems(n, stages.size, root, tracked, row, first, file)
     return problems
@@ -525,7 +540,7 @@ def _override_cell_problems(row: Row, overrides: dict, file: str) -> list[Proble
     if found.status != "open":
         return [Problem(file, row.line, f"{row.name}: override {ident} is {found.status or 'not open'}; an "
                                         "override only counts while it is open")]
-    match = re.match(r"\s*(\d)", found.stage)
+    match = re.match(r"\s*([0-7])(?!\d)", found.stage)         # only stages 0-7 exist; anything else is no match
     if not match or STAGE_NAMES[int(match.group(1))] != row.name:
         return [Problem(file, row.line, f"{row.name}: override {ident} is for stage '{found.stage}', "
                                         "not for this stage")]
