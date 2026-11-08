@@ -1840,7 +1840,7 @@ class GoLiveTiming(GitCase):
 
     def project(self, through=6, size="small", comps=("Parser",), stage5="file:OWNERSHIP.md,file:GO-LIVE.md",
                 golive=None, explain=None, rounds=None, checklist=CHECKLIST_OK, traits_line=None, extra=None,
-                deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None):
+                deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None, manual=None):
         """A consistent project (Small by default) whose stages 0 to `through` are passed; arguments break one thing."""
         big = size == "full"
         root = self.make_repo({"README.md": "# p\n"})
@@ -1867,7 +1867,7 @@ class GoLiveTiming(GitCase):
         names = sorted(set(files) | {"README.md", "STAGES.md", "ARCHITECTURE.md", "src/app.py", E})
         parts = [*comps, "REQ-1", *attack_names]
         tests = [trow(p, *((E,) * 5 if big else (E, E, E if p == "ATK-1" else "", "", ""))) for p in parts]
-        files["ARCHITECTURE.md"] = doc(comps=list(comps), map=names, deps=list(deps), tests=tests)
+        files["ARCHITECTURE.md"] = doc(comps=list(comps), map=names, deps=list(deps), tests=tests, manual=manual)
         evidence = {0: "file:REQUIREMENTS.md,file:ATTACKS.md",
                     1: "file:DECISIONS.md" + (",file:docs/design.md" if big else ""),
                     2: "file:docs/plans/p.md" if big else "file:PLAN.md",
@@ -1967,6 +1967,18 @@ class GoLiveTiming(GitCase):
         self.assert_mentions(self.only(root, "STAGES.md"), "Traits")
         fixed = self.project(extra={"go.mod": "module x\n"}, traits_line="none")
         self.assertFalse(any("Traits" in m for m in messages(self.only(fixed, "STAGES.md"))))
+
+    def test_manual_manifests_need_a_traits_line_at_stage_5(self):
+        root = self.project(manual="build scripts are vendored")
+        self.assert_mentions(self.only(root, "STAGES.md"), "Traits")
+        fixed = self.project(manual="build scripts are vendored", traits_line="none")
+        self.assertFalse(any("Traits" in m for m in messages(self.only(fixed, "STAGES.md"))))
+
+    def test_stage_5_passed_with_ownership_file_missing_is_reported_without_a_crash(self):
+        root = self.project()
+        git(root, "rm", "-q", "--", "OWNERSHIP.md")
+        problems = self.run_all(root)[0]
+        self.assertTrue(any("OWNERSHIP.md" in m for m in messages(problems)), problems)
 
     # ---- the explain-back
     def test_an_open_explain_back_gap_blocks_stage_5(self):

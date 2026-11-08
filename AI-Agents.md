@@ -121,3 +121,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The whole suite passed on the first run, so eight rules were broken on purpose on a copy. Three survived: a row for ATK-1 was never tried against a part list holding only ATK-10, the test for a bare slash passed for the wrong reason (a different message also contained the slash), and one survivor changed nothing because table cells are already trimmed. The two real gaps got tests; the third was recorded as an equivalent change.
+
+### 16. Go-live and ownership checks (2026-11-09)
+
+- **Prompt (or summary of it):** Add trait detection, the Small size refusal, the go-live review table, the explain-back and the full round with the hand-changed commit and the 7-day re-check to the stage gate script, test-first, one test class at a time against stubs.
+- **What the AI produced:** 168 failing tests across nine classes in a first commit, then the checks, the stage wiring (explain-back and go-live at stage 5, full round at stage 6, a re-check reminder that is only a note), the `--go-live` command and two templates with marked worked examples.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** A template test looked for the word "answer" and matched the AI's own message "compared the answers"; the check was loose, not the code. Of 43 rules broken on a throwaway copy, two survived (the manual-manifests path and a missing ownership file at stage 5) and got tests; one mutation matched two places and was rewritten to match one.

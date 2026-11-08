@@ -160,7 +160,7 @@ class TemplateTests(unittest.TestCase):
         left = [p.message for p in ownership_problems(clean, TEMPLATES, [], "small", 1, {})]
         for label in ("Hand-changed commit", "Graded by"):
             self.assertTrue(any(label in m for m in left), (label, left))
-        self.assertFalse(any("answer" in m or "gap" in m or "at least" in m for m in left), left)
+        self.assertFalse(any("answer is blank" in m or "gap is" in m or "answered questions" in m for m in left), left)
 
     def test_ownership_template_has_no_recheck_note_before_it_is_filled_in(self):
         self.assertIsNone(recheck_note(read("OWNERSHIP.md"), date(2100, 1, 1)))
