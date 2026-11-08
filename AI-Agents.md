@@ -39,7 +39,7 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **Prompt (or summary of it):** Write eight templates (decision log, AI log, requirements table, build ledger, results, handover, glossary, pull request), each with one worked example and guidance in HTML comments; the three gated ones must pass the documentation gate.
 - **What the AI produced:** A test file written first (red: 11 errors, one per missing template), then the eight templates; the full suite then passed (52 tests) and the gate reported no problems. Decision D7 and this entry.
 - **What I kept:** All of it.
-- **What I changed or rejected, and why:** None: I have not reviewed the example wording yet; the owner reviews it at the pull request.
+- **What I changed or rejected, and why:** None: the owner made no changes to the example wording.
 - **Where the AI was wrong, and how I noticed:** None found so far: the first run of the gate on the three templates was clean, so no correction was needed; the examples have not yet had an independent review.
 
 ### 6. Writing the principles (2026-11-06)
@@ -55,7 +55,7 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **Prompt (or summary of it):** Add a GitHub Actions workflow that runs the tests and the documentation gate on two Python versions and two operating systems with read-only permissions, and write the final README (badge, the eight-stage table, how to use it in a new project, how it is tested) and the 0.1.0 changelog entry.
 - **What the AI produced:** `.github/workflows/ci.yml` (four jobs), the README, the changelog section, decision D9 and this entry. Local result before the commit: 61 tests run, 1 skipped (the private-name scan, which needs a local environment variable), the gate exits 0, and the workflow file parses as YAML with the intended matrix. The CI runs themselves are started and checked by the owner's controller after the push, not by this task.
 - **What I kept:** All of it.
-- **What I changed or rejected, and why:** None: I have not reviewed the README wording yet; the owner reviews it at the pull request. The proof that the gate can fail is the existing test `test_cli_exit_1_on_broken_repo`, so no broken file is stored in the repository.
+- **What I changed or rejected, and why:** None: the owner made no changes to the README wording. The proof that the gate can fail is the existing test `test_cli_exit_1_on_broken_repo`, so no broken file is stored in the repository.
 - **Where the AI was wrong, and how I noticed:** None found so far: the CI jobs have not run yet, so the matrix is untested on the real runners and the README claim that all four pass rests on the pull request's check results.
 
 ### 8. Final review of v0.1 and its fix wave (2026-11-06)
@@ -70,14 +70,22 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 
 - **Prompt (or summary of it):** Sync `main`, then work through the SHOULD items left from the final review of v0.1.
 - **What the AI produced:** Failing tests first, then the fixes: invalid UTF-8 reported as a problem at its line, backtick fences handled by the renderer's rules with unclosed fences reported, a clear message for a value written below its label, section checks for the ungated templates, the stated total of principles compared with the stage files, the pre-commit hook as an enforcement kind for P5.2, one voice in the design, and D11 to D13. Results: 13 red then 83 passing, 7 red then 99 passing (1 skipped), and the gate exits 0.
-- **What I kept:** None: I have not reviewed this work yet; the owner reviews it at the pull request.
-- **What I changed or rejected, and why:** None: the owner reviews it at the pull request. The AI left P3.4, P1.3 and P1.7 unchanged, because the records it could read hold no measured effect for them; they are listed under "Not done (and why)".
+- **What I kept:** All of it: the owner merged the work as proposed.
+- **What I changed or rejected, and why:** None: the owner made no changes. The AI left P3.4, P1.3 and P1.7 unchanged, because the records it could read hold no measured effect for them (see D14).
 - **Where the AI was wrong, and how I noticed:** The AI tried to search an archived notes folder for the missing numbers and a local rule refused the command; it did not work around the refusal. Its first test edit declared a list with a needless inline assignment, which it noticed and removed before committing. One script it wrote through a shell heredoc printed a warning about a backslash; the run's assertion still passed, but a file should have been used.
 
 ### 10. Releasing v0.1.1 (2026-11-08)
 
 - **Prompt (or summary of it):** Merge the backlog pull request and release 0.1.1 now.
 - **What the AI produced:** The merge of pull request 8, the changelog section for 0.1.1 and this entry, then the annotated tag and the GitHub release once CI on the release commit was green.
-- **What I kept:** None: I have not reviewed this step yet; the owner asked for the release and can check it on the release page.
+- **What I kept:** All of it: the owner asked for the release and it shipped as proposed.
 - **What I changed or rejected, and why:** None: the owner decided to release now, with P3.4, P1.3 and P1.7 still lacking a measured effect.
 - **Where the AI was wrong, and how I noticed:** Its first wait for CI after the merge picked up the run of the previous merge, because the new run had not registered yet, and reported success. The old run number and the blank conclusion of the new commit showed it; after that, runs were matched to the exact commit.
+
+### 11. Closing the open requests (2026-11-08)
+
+- **Prompt (or summary of it):** The owner does not remember the details the open notes asked for, so drop those notes and delete the merged branches.
+- **What the AI produced:** It asked whether "delete them" meant the notes or the three principles. After the owner chose the notes: D14, the removal of the "Not done" line, reworded review fields in entries 5, 7, 9 and 10, and this entry.
+- **What I kept:** The scope I chose from the two options the AI offered: the notes go and all 20 principles stay.
+- **What I changed or rejected, and why:** I rejected removing the three principles.
+- **Where the AI was wrong, and how I noticed:** The AI told the owner that entries 5 to 7 were waiting for review, but entry 6 was already filled; it had copied the range from a handover and noticed when it opened the entries.
