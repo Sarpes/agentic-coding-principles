@@ -97,3 +97,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The conductor shape, the two rule layers, the ladder and the installed-skill mapping.
 - **What I changed or rejected, and why:** I shortened the re-check of my understanding from about 30 days to within the week, asked for a proper README naming the third-party skills, made adoption optional for earlier projects except one, and ruled that publishing does not wait for my full explanation round on that project.
 - **Where the AI was wrong, and how I noticed:** Its first draft left open what counts as evidence and let a gap in understanding go unblocked, which would have allowed the anti-goal of passing every gate without understanding the project; the independent reviewer found both. It also proposed that the release wait for the owner's full explanation round, and I rejected that.
+
+### 13. Reviewing the design and plan before building (2026-11-09)
+
+- **Prompt (or summary of it):** Before development starts, have fresh agents check the design and plan against the owner's own words, including by loading the installed skills to inspect them.
+- **What the AI produced:** Three independent reviews. The first found 12 must-fix problems, among them gates that passed on setup files and installed skills whose next steps skipped stages. The second loaded 16 installed skills and found 8 more. A focused third pass confirmed most fixes and found 5 mistakes the fixes had introduced, all corrected. The owner added an explain-back that blocks release, a lighter Small path and re-confirmation of overrides.
+- **What I kept:** All of the fixes, and the reduced list of dependency file types for this version.
+- **What I changed or rejected, and why:** I kept the trust limit for this version, printed on every run, and kept the re-check at the next working session instead of a scheduled reminder.
+- **Where the AI was wrong, and how I noticed:** The approved design let empty content pass most gates, which three independent readers exposed and the author had not seen. The first round of fixes also carried errors of its own, including a test that could not pass as written and a template that would have raised a false alarm on every full-size project.
