@@ -16,14 +16,18 @@ Layout (one file on purpose, so it can be copied alone; search for the section b
   evidence          the REQUIRED table, evidence items, per-file content rules
   stage checks      stage_problems: evidence, ordering, overrides, adoption
   OVERRIDES.md      parse_overrides and override_problems
-  command           check_project and main
+  architecture      file map, dependency table, test table and attack list checks, manifest readers, their timing
+  command          check_project and main
 """
 from __future__ import annotations
 
+import fnmatch
+import json
 import posixpath
 import re
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -105,6 +109,8 @@ FENCE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
 FIELD = re.compile(r"^- \*\*(.+?):\*\*[ \t]*(.*)$")
 PLACEHOLDER = re.compile(r"(none|n/?a|tbd|todo|-|\.\.\.|…)?\.?", re.I)
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+REQ_ID = re.compile(r"\bREQ-\d+\b")
+ATK_ID = re.compile(r"\bATK-\d+\b")
 
 
 def clean_lines(text: str) -> list[str]:
@@ -384,7 +390,7 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str])
 
 
 def req_problems(text: str) -> list[str]:
-    if any(re.search(r"\bREQ-\d+\b", line) for line in clean_lines(text)):
+    if any(REQ_ID.search(line) for line in clean_lines(text)):
         return []
     return ["no REQ-n identifier found (for example REQ-1); the acceptance criteria are not stated"]
 
@@ -696,43 +702,418 @@ def _is_date(value: str) -> bool:
 
 
 # ------------------------------------------------------ architecture and attacks
-# STUBS: signatures only, so that each test class fails on its own assertions. Replaced by the real code.
 
-def manifest_dependencies(root, tracked) -> tuple[dict, list]:
-    return {}, []
+ARCHITECTURE_FILE = "ARCHITECTURE.md"
+ATTACKS_FILE = "ATTACKS.md"
+REQUIREMENTS_FILE = "REQUIREMENTS.md"
+MAX_FOLDER_FILES = 10
+ATTACK_MINIMUM = {"small": 3, "full": 5}
+COMPONENT_COLUMNS = ["Component", "What it does"]
+MAP_COLUMNS = ["Path", "What it does"]
+TEST_COLUMNS = ["Part", "1 Written first", "2 Catches breakage", "3 Input range", "4 Real integration",
+                "5 Deliberate failure"]
+DEP_COLUMNS = ["Name", "Version", "Why it is here", "What breaks without it"]
+ATTACK_COLUMNS = ["ID", "Attack", "Rung", "Drafted by"]
+BULK = re.compile(r"\(bulk:[ \t]*\S[^)]*\)", re.I)
+OVERRIDE_LINE = re.compile(r"^Override:[ \t]*(O\d+)\b", re.M)
+UNREADABLE_MANIFESTS = ("go.mod", "Cargo.toml", "Gemfile", "pom.xml", "build.gradle", "composer.json",
+                        "environment.yml", "setup.py", "Pipfile")
+PINNED_NPM = re.compile(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]*)?")
 
 
-def file_map_problems(text, tracked, overrides, file="ARCHITECTURE.md") -> list[Problem]:
-    return []
+def _section(text: str, heading: str):
+    """(heading line, [(line number, cleaned line)]) for `## heading`, up to the next heading of level 1 or 2."""
+    lines = clean_lines(text)
+    for i, line in enumerate(lines):
+        if re.fullmatch(rf"## {re.escape(heading)}[ \t]*", line):
+            body = []
+            for j in range(i + 1, len(lines)):
+                if re.match(r"#{1,2} ", lines[j]):
+                    break
+                body.append((j + 1, lines[j]))
+            return i + 1, body
+    return None
 
 
-def dependency_problems(text, deps, unreadable, overrides, file="ARCHITECTURE.md") -> list[Problem]:
-    return []
+def _table(anchor: int, body, columns: list[str]):
+    """(rows, errors): rows are (line, cells) under a header that must match `columns`; errors are (line, message)."""
+    lines = [(n, line) for n, line in body if line.lstrip().startswith("|")]
+    wanted = " | ".join(columns)
+    if not lines:
+        return [], [(anchor, f"no table found (columns: {wanted})")]
+    head_line, head = lines[0]
+    if [c.lower() for c in split_row(head)] != [c.lower() for c in columns]:
+        return [], [(head_line, f"table columns must be exactly: {wanted}")]
+    data = lines[1:]
+    if data and is_alignment_row(split_row(data[0][1])):
+        data = data[1:]
+    rows, errors = [], []
+    for number, line in data:
+        cells = split_row(line)
+        if len(cells) == len(columns):
+            rows.append((number, cells))
+        else:
+            errors.append((number, f"row has {len(cells)} cells; expected {len(columns)}"))
+    return rows, errors
+
+
+def section_override(section_text, overrides, stage: str) -> bool:
+    """True only for an `Override: O<n>` line naming an existing override that is open and is for `stage`."""
+    m = OVERRIDE_LINE.search(section_text)
+    found = overrides.get(m.group(1)) if m else None
+    if found is None or found.status != "open":
+        return False
+    wanted = re.match(r"\s*([0-7])(?!\d)", str(stage))
+    named = re.match(r"\s*([0-7])(?!\d)", found.stage)
+    return bool(wanted and named and wanted.group(1) == named.group(1))
+
+
+def _overridden(body, overrides, stage: str, file: str, heading: str):
+    """(silenced, problems): an Override line that does not count is reported, and the section is still judged."""
+    joined = "\n".join(line for _, line in body)
+    m = OVERRIDE_LINE.search(joined)
+    if m is None:
+        return False, []
+    if section_override(joined, overrides, stage):
+        return True, []
+    ident = m.group(1)
+    line = next(n for n, text in body if text.startswith("Override:"))
+    found = overrides.get(ident)
+    if found is None:
+        why = f"{ident} is not in {OVERRIDES_FILE}"
+    elif found.status != "open":
+        why = f"override {ident} is {found.status or 'not open'}; an override only counts while it is open"
+    else:
+        why = f"override {ident} is for stage '{found.stage}', not for stage {stage}"
+    return False, [Problem(file, line, f"{heading}: {why}")]
+
+
+def _clean_path(raw: str):
+    """A file map path as git writes it, with a trailing slash kept for a folder; None for '/' or '.' alone."""
+    path = raw.strip().strip("`").replace("\\", "/")
+    if path.strip("/") in ("", "."):
+        return None
+    normal = posixpath.normpath(path)
+    return normal + "/" if path.endswith("/") else normal
+
+
+def file_map_problems(text, tracked, overrides, file: str = ARCHITECTURE_FILE) -> list[Problem]:
+    """The file map must name every tracked file (a folder row covers what is below it) and nothing else."""
+    section = _section(text, "File map")
+    if section is None:
+        return [Problem(file, 0, "no '## File map' section")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, "5", file, "File map")
+    if silenced:
+        return []
+    rows, errors = _table(head, body, MAP_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    tracked_set, covered = set(tracked), set()
+    for number, (raw, description) in rows:
+        path = _clean_path(raw)
+        if path is None:
+            problems.append(Problem(file, number, f"'{raw}' is refused: a row must name a file or a real folder, "
+                                                  "not the whole project"))
+            continue
+        if not description.strip():
+            problems.append(Problem(file, number, f"{path} has no description; say what it does"))
+        if path.endswith("/"):
+            inside = [t for t in tracked if t.startswith(path)]
+            if not inside:
+                problems.append(Problem(file, number, f"{path} matches no tracked file"))
+                continue
+            covered.update(inside)
+            if len(inside) > MAX_FOLDER_FILES and not BULK.search(description):
+                problems.append(Problem(file, number, f"{path} covers {len(inside)} files; a folder row may cover "
+                                        f"at most {MAX_FOLDER_FILES} unless its description holds (bulk: <reason>)"))
+        elif path in tracked_set:
+            covered.add(path)
+        else:
+            problems.append(Problem(file, number, f"{path} is not a tracked file"))
+    missing = [t for t in tracked if t not in covered]
+    for name in missing[:20]:
+        problems.append(Problem(file, head, f"{name} is tracked but not in the file map"))
+    if len(missing) > 20:
+        problems.append(Problem(file, head, f"and {len(missing) - 20} more tracked files are not in the file map"))
+    return problems
+
+
+def _dep_key(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name.strip().strip("`").lower())
+
+
+def dependency_problems(text, deps, unreadable, overrides, file: str = ARCHITECTURE_FILE) -> list[Problem]:
+    """The dependency table must list the direct dependencies of the manifests, with their pinned versions."""
+    section = _section(text, "Dependencies")
+    if section is None:
+        return [Problem(file, 0, "no '## Dependencies' section")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, "5", file, "Dependencies")
+    if silenced:
+        return []
+    manual = False
+    for number, line in body:
+        if line.startswith("Manifests:"):
+            reason = re.fullmatch(r"Manifests:[ \t]*manual:[ \t]*(\S.*?)[ \t]*", line)
+            if reason:
+                manual = True
+            else:
+                problems.append(Problem(file, number, "write 'Manifests: manual: <reason>', with a reason"))
+    rows, errors = _table(head, body, DEP_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    listed = {}
+    for number, cells in rows:
+        for label, value in zip(DEP_COLUMNS, cells):
+            if not value.strip():
+                problems.append(Problem(file, number, f"{cells[0] or 'a row'}: '{label}' is blank"))
+        listed[_dep_key(cells[0])] = (number, cells[0], cells[1])
+    if manual:
+        return problems                                        # taken as stated
+    for path in unreadable:
+        problems.append(Problem(file, head, f"{path} cannot be read by this check; list the dependencies by hand "
+                                            "and add 'Manifests: manual: <reason>' to ## Dependencies"))
+    manifest = {_dep_key(name): (name, version) for name, version in deps.items()}
+    for key, (name, version) in sorted(manifest.items()):
+        if key not in listed:
+            problems.append(Problem(file, head, f"{name} is in a manifest but not in the dependency table"))
+        elif version is not None and listed[key][2].strip() != version:
+            problems.append(Problem(file, listed[key][0], f"{name}: the version in the table is "
+                                    f"'{listed[key][2]}' but the manifest pins {version}"))
+    for key, (number, name, _) in listed.items():
+        if key not in manifest:
+            problems.append(Problem(file, number, f"{name} is in the dependency table but in no manifest; "
+                                                  "remove it or add 'Manifests: manual: <reason>'"))
+    return problems
+
+
+def _rung_problem(cell: str, root, tracked: set[str]):
+    """Why a test-table cell is not acceptable evidence (None when it is)."""
+    text = cell.strip()
+    if not text:
+        return "empty; name a tracked test or results file or a commit, or write 'n/a: <reason>'"
+    if re.match(r"n/a\b", text, re.I):
+        reason = re.fullmatch(r"n/a[ \t]*:[ \t]*(.*)", text, re.I | re.S)
+        if reason and reason.group(1).strip() and not PLACEHOLDER.fullmatch(reason.group(1).strip()):
+            return None
+        return "'n/a' needs a reason: write 'n/a: <reason>'"
+    for token in re.split(r"[\s,;()`'\"]+", text):
+        token = token.split("::")[0].rstrip(".")
+        if not token:
+            continue
+        if norm_path(token) in tracked:
+            return None
+        if re.fullmatch("[0-9a-f]{7,40}", token):
+            resolved = resolve_commit(root, token)
+            if resolved and is_ancestor(root, resolved, "HEAD"):
+                return None
+    return f"'{text}' holds no tracked file or commit on the current history; write one, or 'n/a: <reason>'"
 
 
 def test_table_problems(text, size, parts, attack_rungs, tracked, root, overrides,
-                        file="ARCHITECTURE.md") -> list[Problem]:
-    return []
+                        file: str = ARCHITECTURE_FILE) -> list[Problem]:
+    """One row per part (a component, a REQ-n or an ATK-n); each required rung holds evidence or a reason."""
+    section = _section(text, "Tests")
+    if section is None:
+        return [Problem(file, 0, "no '## Tests' section")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, "4", file, "Tests")
+    if silenced:
+        return []
+    rows, errors = _table(head, body, TEST_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    if not rows and not errors:
+        problems.append(Problem(file, head, "the test table has no rows; every part needs one"))
+    tracked_set, seen = set(tracked), {}
+    rungs = (1, 2) if size == "small" else (1, 2, 3, 4, 5)
+    for number, cells in rows:
+        part = cells[0].strip("` ")
+        if part not in parts:
+            ids = REQ_ID.findall(part) + ATK_ID.findall(part)
+            if len(ids) > 1:
+                problems.append(Problem(file, number, f"'{part}' names more than one id; one part per row"))
+            else:
+                problems.append(Problem(file, number, f"'{part}' is not a part; the first cell must be exactly "
+                                                      "one component, REQ-n or ATK-n"))
+            continue
+        if part in seen:
+            problems.append(Problem(file, number, f"{part} has more than one row (first at line {seen[part]})"))
+            continue
+        seen[part] = number
+        for rung in sorted(set(rungs) | ({attack_rungs[part]} if part in attack_rungs else set())):
+            why = _rung_problem(cells[rung], root, tracked_set)
+            if why:
+                problems.append(Problem(file, number, f"{part}: rung {rung} ({TEST_COLUMNS[rung][2:]}): {why}"))
+    for part in sorted(set(parts) - set(seen)):
+        problems.append(Problem(file, head, f"{part} has no row in the test table"))
+    return problems
 
 
-def attack_problems(text, size, file="ATTACKS.md") -> list[Problem]:
-    return []
+def components(text) -> set[str]:
+    section = _section(text, "Components")
+    if section is None:
+        return set()
+    rows, _ = _table(section[0], section[1], COMPONENT_COLUMNS)
+    return {cells[0].strip("` ") for _, cells in rows if cells[0].strip("` ")}
 
 
-def requirement_ids(text) -> set:
-    return set()
+def requirement_ids(text) -> set[str]:
+    return {m for line in clean_lines(text) for m in REQ_ID.findall(line)}
 
 
-def attack_rungs(text) -> dict:
-    return {}
+def _attack_rows(text: str):
+    return _table(0, list(enumerate(clean_lines(text), start=1)), ATTACK_COLUMNS)
 
 
-def components(text) -> set:
-    return set()
+def attack_ids(text) -> set[str]:
+    return {cells[0].strip("` ") for _, cells in _attack_rows(text)[0] if ATK_ID.fullmatch(cells[0].strip("` "))}
 
 
-def section_override(section_text, overrides, stage) -> bool:
-    return False
+def attack_rungs(text) -> dict[str, int]:
+    """Attack id to the rung (3 or 5) it must be tried at; attacks marked '-' are left out."""
+    return {cells[0].strip("` "): int(cells[2]) for _, cells in _attack_rows(text)[0]
+            if ATK_ID.fullmatch(cells[0].strip("` ")) and cells[2] in ("3", "5")}
+
+
+def attack_problems(text, size, file: str = ATTACKS_FILE) -> list[Problem]:
+    rows, errors = _attack_rows(text)
+    problems = [Problem(file, n, m) for n, m in errors]
+    for number, line in enumerate(clean_lines(text), start=1):
+        if EXAMPLE_MARKER in line:
+            problems.append(Problem(file, number, f"still contains the template marker {EXAMPLE_MARKER}; "
+                                                  "replace the worked example"))
+    needed = ATTACK_MINIMUM.get(size, ATTACK_MINIMUM["small"])
+    if not errors and len(rows) < needed:
+        problems.append(Problem(file, 0, f"{len(rows)} attack rows; a {size} project needs at least {needed}"))
+    for position, (number, (ident, attack, rung, author)) in enumerate(rows, start=1):
+        if ident.strip("` ") != f"ATK-{position}":
+            problems.append(Problem(file, number, f"id '{ident}' should be ATK-{position}; ids run ATK-1, "
+                                                  "ATK-2, ... in order"))
+        if rung not in ("3", "5", "-"):
+            problems.append(Problem(file, number, f"Rung '{rung}' must be 3, 5 or - (not needed)"))
+        for label, value in (("Attack", attack), ("Drafted by", author)):
+            if not value.strip():
+                problems.append(Problem(file, number, f"'{label}' is blank"))
+    return problems
+
+
+# ------------------------------------------------------------------ manifests
+
+def _requirements_deps(text: str):
+    found = []
+    for line in normalise(text).split("\n"):
+        line = re.sub(r"(^|\s)#.*$", "", line).strip()
+        if not line or line.startswith(("-", ".", "/")):
+            continue
+        if "://" in line and not re.match(r"[\w.-]+\s*(\[[^\]]*\])?\s*@", line):
+            continue
+        found.append(_pep508(line))
+    return [f for f in found if f]
+
+
+def _pep508(requirement: str):
+    m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*([^;]*)", requirement)
+    if not m:
+        return None
+    pinned = re.search(r"(?<![=!<>~])==\s*([^\s,]+)", m.group(2))
+    return _dep_key(m.group(1)), (pinned.group(1) if pinned and "*" not in pinned.group(1) else None)
+
+
+def _pyproject_deps(text: str):
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    if "poetry" in (data.get("tool") or {}) or "dependency-groups" in data:
+        return None
+    project = data.get("project") or {}
+    lists = [project.get("dependencies") or []]
+    lists += list((project.get("optional-dependencies") or {}).values())
+    found = [_pep508(item) for items in lists if isinstance(items, list) for item in items if isinstance(item, str)]
+    return [f for f in found if f]
+
+
+def _package_json_deps(text: str):
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    found = []
+    for section in ("dependencies", "devDependencies"):
+        for name, version in (data.get(section) or {}).items():
+            pinned = isinstance(version, str) and PINNED_NPM.fullmatch(version.strip())
+            found.append((name, version.strip() if pinned else None))
+    return found
+
+
+def manifest_dependencies(root, tracked) -> tuple[dict[str, str | None], list[str]]:
+    """(name to pinned version or None, manifest paths this check cannot read). Direct dependencies only."""
+    root = Path(root)
+    deps: dict[str, str | None] = {}
+    unreadable: list[str] = []
+    for rel in sorted(tracked):
+        parts = rel.split("/")
+        base = parts[-1]
+        if "node_modules" in parts[:-1]:
+            continue
+        if base in UNREADABLE_MANIFESTS:
+            unreadable.append(rel)
+            continue
+        if fnmatch.fnmatchcase(base.lower(), "requirements*.txt"):
+            reader = _requirements_deps
+        elif base == "pyproject.toml":
+            reader = _pyproject_deps
+        elif base == "package.json":
+            reader = _package_json_deps
+        else:
+            continue
+        path = root / rel
+        text = decode(path.read_bytes(), rel)[0] if path.is_file() else None   # not UTF-8 counts as unreadable
+        found = reader(text) if text is not None else None
+        if found is None:
+            unreadable.append(rel)
+            continue
+        for name, version in found:
+            if deps.get(name) is None:
+                deps[name] = version
+    return deps, unreadable
+
+
+def architecture_problems(root, tracked, stages, overrides) -> list[Problem]:
+    """The checks that bind at a stage: attack list at 0, test table at 4, file map and dependencies at 5."""
+    if stages is None or stages.size not in SIZES:
+        return []
+
+    def passed(n: int) -> bool:
+        row = stages.rows.get(n)
+        return row is not None and row.status == "passed"
+
+    root, problems = Path(root), []
+    attacks, found = _load(root, ATTACKS_FILE)
+    if passed(0):
+        problems += found
+        if attacks is not None:
+            problems += attack_problems(attacks, stages.size)
+    if not (passed(4) or passed(5)):
+        return problems
+    text, found = _load(root, ARCHITECTURE_FILE)
+    problems += found
+    if text is None:
+        if passed(5) and not found:
+            problems.append(Problem(ARCHITECTURE_FILE, 0, "file is missing; copy templates/ARCHITECTURE.md into the "
+                                                          "project and fill it in"))
+        return problems
+    if passed(4):
+        requirements, _ = _load(root, REQUIREMENTS_FILE)
+        parts = components(text) | requirement_ids(requirements or "") | attack_ids(attacks or "")
+        problems += test_table_problems(text, stages.size, parts, attack_rungs(attacks or ""), tracked, root,
+                                        overrides)
+    if passed(5):
+        problems += file_map_problems(text, tracked, overrides)
+        deps, unreadable = manifest_dependencies(root, tracked)
+        problems += dependency_problems(text, deps, unreadable, overrides)
+    return problems
 
 
 # --------------------------------------------------------------------- command
@@ -767,9 +1148,10 @@ def check_project(root, today: date | None = None) -> tuple[list[Problem], list[
         problems += stage_problems(stages_text, root, tracked, overrides, STAGES_FILE)
     if overrides_text is not None or not found:
         problems += override_problems(overrides_text, root, stages, OVERRIDES_FILE)
+    problems += architecture_problems(root, tracked, stages, overrides)
     notes += [f"open override {ident} (stage {o.stage}): see {OVERRIDES_FILE}"
               for ident, o in overrides.items() if o.status == "open"]
-    problems.sort(key=lambda p: (p.file, p.line))
+    problems = sorted(set(problems), key=lambda p: (p.file, p.line, p.message))   # one report per problem
     return problems, notes
 
 

@@ -728,7 +728,7 @@ class ArchitectureRules(GitCase):
         self.assert_mentions(self.fm(doc(map=[("src/", "samples (bulk: )")]), ELEVEN), "10")
 
     def test_slash_alone_is_refused(self):
-        self.assert_mentions(self.fm(doc(map=["/"]), ["a.py"]), "/")
+        self.assert_mentions(self.fm(doc(map=["/"]), ["a.py"]), "refused")
 
     def test_slash_alone_is_refused_even_with_a_bulk_reason(self):
         problems = self.fm(doc(map=[("/", "everything (bulk: all)"), "a.py"]), ["a.py"])
@@ -858,6 +858,14 @@ class ArchitectureRules(GitCase):
 
     def test_na_with_an_empty_reason_is_refused(self):
         self.assert_mentions(self.ttp([trow("REQ-1", E, "n/a:  ", E, E, E)], "full", {"REQ-1"}), "reason")
+
+    def test_na_with_a_placeholder_reason_is_refused(self):
+        self.assert_mentions(self.ttp([trow("REQ-1", E, "n/a: tbd", E, E, E)], "full", {"REQ-1"}), "reason")
+
+    def test_row_is_not_matched_by_a_longer_id(self):
+        problems = self.ttp([trow("ATK-1", E, E, E, E, E)], "full", {"ATK-10"})
+        self.assert_mentions(problems, "'ATK-1' is not a part")
+        self.assert_mentions(problems, "ATK-10 has no row")
 
     def test_na_with_a_reason_passes(self):
         rows = [trow("REQ-1", E, "n/a: pure text only", E, E, E)]

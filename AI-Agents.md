@@ -113,3 +113,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** A small edit to the test file, written through a shell here-document, turned a backslash-n into a real line break and broke the file; the first test run failed with a syntax error and the line was fixed with an editor call. The suite then passed on the first run, which proves little, so two rules were broken on purpose (any commit counts as history; the setup commit counts as after) and the matching tests went red.
+
+### 15. Architecture checks: file map, dependencies, test table, attacks (2026-11-09)
+
+- **Prompt (or summary of it):** Add the checks for the architecture document and the attack list to the stage gate script, test-first, one test class at a time against stubs that return nothing, with real temporary git repositories; write the two templates.
+- **What the AI produced:** 83 failing tests across four classes (seen failing on their own assertions) in a first commit, then the checks, the manifest readers, the stage timing and two templates, with every worked example marked. D18 records why each check binds at its own stage.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The whole suite passed on the first run, so eight rules were broken on purpose on a copy. Three survived: a row for ATK-1 was never tried against a part list holding only ATK-10, the test for a bare slash passed for the wrong reason (a different message also contained the slash), and one survivor changed nothing because table cells are already trimmed. The two real gaps got tests; the third was recorded as an equivalent change.
