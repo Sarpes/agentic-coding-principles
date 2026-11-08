@@ -132,6 +132,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** A project's own copies of these five documents can drift from the template without any check.
 - **What would make you change it:** A real project losing work because one of these documents lacked a section would justify a gate rule for that document.
 
+### D14. A principle may state a real event without a measured effect
+
+- **Context:** The final review of v0.1 asked for a measured effect on P3.4, P1.3 and P1.7. Their events are on record, but no number is, and the owner no longer remembers one.
+- **Options considered:** (a) keep the three principles as they stand and stop tracking the request; (b) remove them and list them as candidates; (c) keep the request open until a number turns up.
+- **Chosen:** (a), by the owner.
+- **Why:** The anti-goal forbids rules without an incident, and these three have one. A number would add weight, but it cannot be recovered and must not be invented.
+- **Rejected:** (b), because it would drop rules backed by real events, including P3.4, the idea this repository rests on; (c), because nobody can ever close that item.
+- **Cost / trade-off:** These three principles carry less evidence than the others, so a reader takes the event on trust.
+- **What would make you change it:** A recovered number goes into the principle.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
@@ -144,7 +154,6 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - Skill packaging: later, by the owner's choice.
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
-- A measured effect for P3.4, P1.3 and P1.7: this repository's records hold those events without a number, and a number cannot be invented; only the owner's source projects can supply one.
 - Write a requirements matrix on day one: candidate principle awaiting a real incident (the requirement check that came late still passed).
 - Keep a glossary of domain terms and a diagram of how the parts talk: candidate principle awaiting a real incident.
 - Compute dates and rules in deterministic code, not in a language model: candidate principle awaiting a real incident (only a benefit is recorded).
