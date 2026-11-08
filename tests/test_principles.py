@@ -21,7 +21,9 @@ PRINCIPLES = ROOT / "principles"
 STAGE_FILES = ("00-intake.md", "01-design.md", "02-plan.md", "03-build.md",
                "04-verify.md", "05-ship.md", "06-own.md", "07-retro.md")
 FIELDS = ("Rule", "Why (incident)", "How to check", "Enforced by")
-ENFORCERS = ("template", "check_docs", "CI", "human gate", "contract hook (planned, v0.2)")
+ENFORCERS = ("template", "check_docs", "CI", "human gate", "pre-commit hook", "contract hook (planned, v0.2)")
+# Files that state the current total; the changelog and the logs record what was true at the time.
+COUNT_FILES = ("README.md", "principles/README.md")
 EMPTY_STAGE = "awaiting a real incident"
 NO_INCIDENT = "no single measured incident"
 
@@ -58,6 +60,18 @@ def enforcer_problems(value: str) -> list[str]:
     """Kinds in an 'Enforced by' value that are not one of the five allowed kinds."""
     parts = [p.strip() for p in value.rstrip(".").split("+")]
     return [p for p in parts if p not in ENFORCERS]
+
+
+def defined_kinds(index: str) -> list[str]:
+    """First column of the table under '## Enforcement kinds' in the index."""
+    section = index.split("## Enforcement kinds", 1)[1].split("\n## ", 1)[0]
+    cells = re.findall(r"^\| *([^|]+?) *\|", section, re.M)
+    return [c for c in cells if c != "Kind" and not set(c) <= {"-", ":"}]
+
+
+def wrong_counts(text: str, actual: int) -> list[str]:
+    """Every 'N principles' in the text whose N is not the actual total."""
+    return []
 
 
 def forbidden_hits(text: str, names: list[str]) -> list[str]:
@@ -122,6 +136,15 @@ class PrincipleFormatTests(unittest.TestCase):
         self.assertEqual(sorted(defined - listed), [], "ids missing from the index")
         self.assertEqual(sorted(listed - defined), [], "index lists ids that do not exist")
 
+    def test_every_enforcement_kind_is_defined_in_the_index(self):
+        self.assertEqual(sorted(defined_kinds(read(PRINCIPLES / "README.md"))), sorted(ENFORCERS))
+
+    def test_stated_totals_match_the_stage_files(self):
+        total = sum(len(principles(read(PRINCIPLES / name))) for name in STAGE_FILES)
+        for name in COUNT_FILES:
+            with self.subTest(file=name):
+                self.assertEqual(wrong_counts(read(ROOT / name), total), [])
+
     def test_no_internal_codes(self):
         for name in ("README.md",) + STAGE_FILES:
             with self.subTest(file=name):
@@ -136,6 +159,19 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(enforcer_problems("check_docs + contract hook (planned, v0.2)"), [])
         self.assertEqual(enforcer_problems("process"), ["process"])
         self.assertEqual(enforcer_problems("contract hook"), ["contract hook"])
+
+    def test_wrong_total_fires(self):
+        self.assertEqual(wrong_counts("The repository holds 21 principles.", 20), ["21 principles"])
+
+    def test_right_total_passes(self):
+        self.assertEqual(wrong_counts("20 principles in all.", 20), [])
+
+    def test_text_without_a_total_passes(self):
+        self.assertEqual(wrong_counts("The principles are listed below.", 20), [])
+
+    def test_defined_kinds_reads_only_its_own_table(self):
+        index = "## Enforcement kinds\n\n| Kind | Meaning |\n|---|---|\n| CI | x |\n\n## Index\n\n| Stage | y |\n"
+        self.assertEqual(defined_kinds(index), ["CI"])
 
     def test_forbidden_hits_fire_case_insensitively(self):
         self.assertEqual(forbidden_hits("Built for ACMECORP.", ["AcmeCorp"]), ["AcmeCorp"])

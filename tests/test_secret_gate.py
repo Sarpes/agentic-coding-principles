@@ -69,6 +69,12 @@ class SecretGate(unittest.TestCase):
         self.assertNotIn(fake.split("=", 1)[1], done.stderr)          # the value is never shown
         self.assertEqual(self.git("rev-parse", "--verify", "HEAD").returncode != 0, True)  # no commit made
 
+    def test_commit_of_a_file_named_like_an_env_file_is_refused(self):
+        done = self.commit("local.env", "nothing secret in the content\n")
+        self.assertNotEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("REFUSED", done.stderr)
+        self.assertNotEqual(self.git("rev-parse", "--verify", "HEAD").returncode, 0)  # no commit made
+
     def test_harmless_file_commits(self):
         done = self.commit("notes.txt", "nothing secret here\n")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
