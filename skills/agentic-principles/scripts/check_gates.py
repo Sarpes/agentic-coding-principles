@@ -1116,6 +1116,43 @@ def architecture_problems(root, tracked, stages, overrides) -> list[Problem]:
     return problems
 
 
+# ------------------------------------------------------ traits, size and go-live
+
+def detect_traits(root, tracked, deps) -> set[str]:
+    return set()
+
+
+def size_problems(stages, tracked, traits, file: str = STAGES_FILE) -> list[Problem]:
+    return []
+
+
+def traits_line_problems(stages, unreadable, manual: bool, file: str = STAGES_FILE) -> list[Problem]:
+    return []
+
+
+def required_go_live_ids(traits, checklist: list[dict], attacks: set[str]) -> set[str]:
+    return set()
+
+
+def go_live_problems(text, required: set[str], overrides, file: str = "GO-LIVE.md") -> list[Problem]:
+    return []
+
+
+# ----------------------------------------------------------------- OWNERSHIP.md
+
+def explain_back_problems(text, overrides, file: str = "OWNERSHIP.md") -> list[Problem]:
+    return []
+
+
+def ownership_problems(text, root, tracked, size, components: int, overrides,
+                       file: str = "OWNERSHIP.md") -> list[Problem]:
+    return []
+
+
+def recheck_note(text, today: date) -> str | None:
+    return None
+
+
 # --------------------------------------------------------------------- command
 
 def _load(root: Path, name: str):
