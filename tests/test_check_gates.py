@@ -225,6 +225,18 @@ class StageRules(GitCase):
         problems = self.check(table(row(0, "overridden", "", "O1")), {"O1": Override("closed", "0 Intake", "-")})
         self.assert_mentions(problems, "closed")
 
+    def test_override_naming_a_stage_beyond_7_is_a_problem_not_a_crash(self):
+        for bad in ("8 Foo", "9 Foo", "99"):
+            with self.subTest(stage=bad):
+                problems = self.check(table(row(0, "overridden", "", "O1")), {"O1": Override("open", bad, "-")})
+                self.assert_mentions(problems, "stage")
+
+    def test_non_utf8_evidence_file_is_a_problem_at_its_line(self):
+        commit(self.root, {"REQUIREMENTS.md": b"REQ-1 ok\n\xff\n"})
+        problems = self.check(self.stage0("file:REQUIREMENTS.md,file:ATTACKS.md"))
+        hit = [p for p in problems if "UTF-8" in p.message]
+        self.assertEqual([(p.file, p.line) for p in hit], [("REQUIREMENTS.md", 2)])
+
     def test_open_override_for_its_stage_passes(self):
         problems = self.check(table(row(0, "overridden", "", "O1")), {"O1": Override("open", "0 Intake", "-")})
         self.assertEqual(problems, [])
