@@ -4,6 +4,13 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `checks/check_docs.py`: a file that is not valid UTF-8 is reported at the line of the bad byte instead of crashing the gate.
+- `checks/check_docs.py`: backtick fences follow the renderer's rules, and an unclosed fence is reported at its opening line.
+- `checks/check_docs.py`: a value written on the line below its label gets a message that says so.
+- `principles/`: new enforcement kind "pre-commit hook"; P5.2 names it instead of a planned hook.
+- `tests/`: the five ungated templates are checked for their parts, the stated total of principles is compared with the stage files, and a file named `*.env` must be refused by the secret gate.
+- `docs/design.md`: one name for the owner throughout.
+
 ## [0.1.0] - 2026-11-06
 
 - Repository scaffold: licence, ignore rules, design, decision log and AI log.

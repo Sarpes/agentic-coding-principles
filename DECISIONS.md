@@ -102,6 +102,36 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Running the gate in the wrong directory now reports "file is missing" problems (exit 1) instead of a usage error.
 - **What would make you change it:** A report that people run the gate from the wrong folder and are confused by the output would bring back an explicit argument or a clearer message for a folder that has neither log.
 
+### D11. Backtick fences follow the renderer's rules, and an unclosed fence is a problem
+
+- **Context:** The gate blanks fenced code so that examples are not checked. It toggled on any line starting with three backticks, so a longer fence showing a shorter one exposed its example, inline triple backticks hid the rest of the file, and an unclosed fence silently switched off every check after it.
+- **Options considered:** (a) keep the toggle and only report an odd number of fence lines; (b) apply the renderer's rules for backtick fences (a closing line has at least as many backticks and no text after them, an opening line has no further backtick) and report an unclosed fence at its opening line; (c) use a full Markdown parser.
+- **Chosen:** (b).
+- **Why:** The gate must blank exactly what a reader sees as code. An unclosed fence keeps blanking to the end of the file, as it renders, and the problem at its opening line says why later entries were not checked.
+- **Rejected:** (a), because a longer fence would still expose its example and an even count can hide two wrong lines; (c), because the design allows the standard library only.
+- **Cost / trade-off:** Tilde fences (`~~~`) are still not treated as fences, so an example inside one is checked like normal text. That failure is loud, not silent.
+- **What would make you change it:** A real log that uses tilde fences for examples adds them to the same rule.
+
+### D12. The public pre-commit hook is its own enforcement kind
+
+- **Context:** P5.2 named "contract hook (planned, v0.2)" as its enforcer, although a pre-commit secret gate is public in `.githooks/` and refuses both cases the principle describes.
+- **Options considered:** (a) keep the planned hook until v0.2; (b) add a kind "pre-commit hook", defined in the index and accepted by the test; (c) count the hook as "CI" or "human gate".
+- **Chosen:** (b), with a test that every kind is defined in the index and a new test that a file named `*.env` is refused.
+- **Why:** D8 says a mechanism that no kind describes gets a new kind with a definition and a test. The hook exists and is tested, so calling it planned understated what the repository enforces.
+- **Rejected:** (a), because it describes a real mechanism as future work; (c), because CI runs after the push and a human gate is a person, while the hook refuses the commit itself.
+- **Cost / trade-off:** The hook works only after each clone enables it with `git config core.hooksPath .githooks`, so the human gate stays named beside it.
+- **What would make you change it:** A portable tool-call hook in v0.2 may replace this kind for rules that a commit cannot see.
+
+### D13. The ungated templates are checked by tests, not by the gate
+
+- **Context:** The gate reads three kinds of document. The other five templates were tested only for length and a comment, so a deleted section would have gone unnoticed.
+- **Options considered:** (a) test the shipped templates for the parts their guidance promises; (b) extend `check_docs.py` to require those documents in every project.
+- **Chosen:** (a).
+- **Why:** The defect is a broken template in this repository, and a test finds it. Build ledgers, results and handovers are not required in every project, and a handover changes shape as work goes on.
+- **Rejected:** (b), because it would fail projects for leaving out documents that the framework does not require.
+- **Cost / trade-off:** A project's own copies of these five documents can drift from the template without any check.
+- **What would make you change it:** A real project losing work because one of these documents lacked a section would justify a gate rule for that document.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
@@ -114,6 +144,7 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - Skill packaging: later, by the owner's choice.
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
+- A measured effect for P3.4, P1.3 and P1.7: this repository's records hold those events without a number, and a number cannot be invented; only the owner's source projects can supply one.
 - Write a requirements matrix on day one: candidate principle awaiting a real incident (the requirement check that came late still passed).
 - Keep a glossary of domain terms and a diagram of how the parts talk: candidate principle awaiting a real incident.
 - Compute dates and rules in deterministic code, not in a language model: candidate principle awaiting a real incident (only a benefit is recorded).
