@@ -30,7 +30,8 @@ STATUSES = ("open", "met", "not done")
 FIELD = re.compile(r"^- \*\*(.+?):\*\*[ \t]*(.*)$")
 # A bare value that gives no reason: nothing, None, N/A, TBD, TODO, a dash or an ellipsis.
 PLACEHOLDER = re.compile(r"(none|n/?a|tbd|todo|-|\.\.\.|…)?\.?", re.I)
-FENCE = re.compile(r"^ {0,3}```")
+# Three or more backticks, then an info text that holds no backtick (so ```x``` is inline code).
+FENCE = re.compile(r"^ {0,3}(`{3,})([^`]*)$")
 ANY_HEADING = re.compile(r"^#{1,3} ")
 GROUPED = re.compile(r"^### (D\d+\s*[-–,]\s*D?\d+)")
 
@@ -40,17 +41,27 @@ def normalise(text: str) -> str:
     return text.lstrip("﻿").replace("\r\n", "\n")
 
 
-def prepare(text: str) -> list[str]:
-    """Lines of the text with fenced code blocks blanked, so line numbers stay true."""
+def prepare(text: str, file: str) -> tuple[list[str], list[Problem]]:
+    """Lines with fenced code blocks blanked, so line numbers stay true, and a problem for an unclosed fence.
+
+    A fence closes only on a line of at least as many backticks with no text after them.
+    An unclosed fence runs to the end of the file, as it does when the file is rendered.
+    """
     lines = normalise(text).split("\n")
-    inside = False
+    opened = None                                         # (line number, backtick count) of the open fence
     for i, line in enumerate(lines):
-        if FENCE.match(line):
-            inside = not inside
+        m = FENCE.match(line)
+        if opened is None:
+            if m:
+                opened = (i + 1, len(m.group(1)))
+                lines[i] = ""
+        else:
+            if m and len(m.group(1)) >= opened[1] and not m.group(2).strip():
+                opened = None
             lines[i] = ""
-        elif inside:
-            lines[i] = ""
-    return lines
+    if opened:
+        return lines, [Problem(file, opened[0], "unclosed code fence: everything after this line is ignored")]
+    return lines, []
 
 
 def entries(lines: list[str], heading: re.Pattern) -> list[tuple[int, int, list[tuple[int, str]]]]:
@@ -88,12 +99,20 @@ def near_miss(label: str, body: list[tuple[int, str]]):
     return None
 
 
+def text_below(body: list[tuple[int, str]], position: int):
+    """Line number of the indented text under an empty label, if that is the next non-blank line."""
+    for number, line in body[position + 1:]:
+        if line.strip():
+            return number if line[0] in " \t" else None
+    return None
+
+
 def field_problems(name: str, heading_line: int, body, required, strict: bool, file: str) -> list[Problem]:
-    found: dict[str, str] = {}
-    for _, line in body:
+    found: dict[str, tuple[str, int]] = {}
+    for position, (_, line) in enumerate(body):
         m = FIELD.match(line)
         if m:
-            found[m.group(1).strip()] = m.group(2).strip()
+            found[m.group(1).strip()] = (m.group(2).strip(), position)
     problems = []
     for label in required:
         exact = f"- **{label}:**"
@@ -104,11 +123,17 @@ def field_problems(name: str, heading_line: int, body, required, strict: bool, f
                                         f"{name}: missing '{exact}' (found '{hit[1]}'; expected exactly '{exact}')"))
             else:
                 problems.append(Problem(file, heading_line, f"{name}: missing '{exact}'"))
-        elif strict and PLACEHOLDER.fullmatch(found[label]):
+            continue
+        value, position = found[label]
+        below = None if value else text_below(body, position)
+        if below:
+            problems.append(Problem(file, below,
+                                    f"{name}: the text of '{label}' must be on the same line as '{exact}'"))
+        elif strict and PLACEHOLDER.fullmatch(value):
             problems.append(Problem(file, heading_line,
                                     f"{name}: '{label}' is empty or a placeholder "
                                     "(write 'None: <reason>' if nothing applies)"))
-        elif not found[label]:
+        elif not value:
             problems.append(Problem(file, heading_line, f"{name}: '{label}' is empty"))
     return problems
 
@@ -122,10 +147,10 @@ def heading_form_problems(lines: list[str], like: re.Pattern, exact: re.Pattern,
 
 
 def decisions_problems(text: str, file: str = "DECISIONS.md") -> list[Problem]:
-    lines = prepare(text)
+    lines, problems = prepare(text, file)
     items = entries(lines, re.compile(r"^### D(\d+)\."))
-    problems = [Problem(file, i + 1, f"{m.group(1)}: one decision per entry (split the grouped heading)")
-                for i, line in enumerate(lines) if (m := GROUPED.match(line))]
+    problems += [Problem(file, i + 1, f"{m.group(1)}: one decision per entry (split the grouped heading)")
+                 for i, line in enumerate(lines) if (m := GROUPED.match(line))]
     problems += heading_form_problems(lines, re.compile(r"^#{1,6}\s*D\d+"), re.compile(r"^### D\d+\. "),
                                       "### D<number>. <title>", file)
     problems += numbering_problems(items, "D", file)
@@ -140,11 +165,11 @@ def decisions_problems(text: str, file: str = "DECISIONS.md") -> list[Problem]:
 
 
 def ai_log_problems(text: str, file: str = "AI-Agents.md") -> list[Problem]:
-    lines = prepare(text)
+    lines, problems = prepare(text, file)
     items = entries(lines, re.compile(r"^### (\d+)\."))
     # 1-3 digits only, so a heading such as "### 2026 plans" is not mistaken for an entry
-    problems = heading_form_problems(lines, re.compile(r"^#{1,6}\s*\d{1,3}(?:[.)]|\s|$)"),
-                                     re.compile(r"^### \d+\. "), "### <number>. <title>", file)
+    problems += heading_form_problems(lines, re.compile(r"^#{1,6}\s*\d{1,3}(?:[.)]|\s|$)"),
+                                      re.compile(r"^### \d+\. "), "### <number>. <title>", file)
     problems += numbering_problems(items, "", file)
     for n, heading_line, body in items:
         problems += field_problems(f"entry {n}", heading_line, body, AI_LOG_FIELDS, False, file)
@@ -161,13 +186,14 @@ def split_row(line: str) -> list[str]:
 
 
 def requirements_problems(text: str, file: str = "REQUIREMENTS.md") -> list[Problem]:
-    rows = [(i + 1, line) for i, line in enumerate(prepare(text)) if line.lstrip().startswith("|")]
+    lines, problems = prepare(text, file)
+    rows = [(i + 1, line) for i, line in enumerate(lines) if line.lstrip().startswith("|")]
     if not rows:
-        return [Problem(file, 0, "no requirements table found (columns: " + " | ".join(REQUIREMENT_COLUMNS) + ")")]
+        return problems + [Problem(file, 0, "no requirements table found (columns: "
+                                   + " | ".join(REQUIREMENT_COLUMNS) + ")")]
     head_line, head = rows[0]
     if [c.lower() for c in split_row(head)] != [c.lower() for c in REQUIREMENT_COLUMNS]:
-        return [Problem(file, head_line, "table columns must be exactly: " + " | ".join(REQUIREMENT_COLUMNS))]
-    problems = []
+        return problems + [Problem(file, head_line, "table columns must be exactly: " + " | ".join(REQUIREMENT_COLUMNS))]
     data = rows[1:]
     if data and all(re.fullmatch(r":?-+:?", c) for c in split_row(data[0][1])):
         data = data[1:]                                   # the alignment row under the header
@@ -193,8 +219,15 @@ def requirements_problems(text: str, file: str = "REQUIREMENTS.md") -> list[Prob
     return problems
 
 
-def read(path: Path) -> str:
-    return path.read_text(encoding="utf-8-sig")
+def file_problems(path: Path, name: str, rule) -> list[Problem]:
+    """Run a rule on a file; bytes that are not UTF-8 are a problem in the file, not a crash of the gate."""
+    data = path.read_bytes()
+    try:
+        text = data.decode("utf-8")                       # normalise() drops a byte-order mark
+    except UnicodeDecodeError as error:
+        return [Problem(name, data[:error.start].count(b"\n") + 1,
+                        f"not valid UTF-8 (byte 0x{data[error.start]:02x}); save the file as UTF-8")]
+    return rule(text, name)
 
 
 def check_repo(root: Path) -> list[Problem]:
@@ -203,12 +236,12 @@ def check_repo(root: Path) -> list[Problem]:
     for name, rule in (("DECISIONS.md", decisions_problems), ("AI-Agents.md", ai_log_problems)):
         path = root / name
         if path.is_file():
-            problems += rule(read(path), name)
+            problems += file_problems(path, name, rule)
         else:
             problems.append(Problem(name, 0, "file is missing"))
     requirements = root / "REQUIREMENTS.md"
     if requirements.is_file():
-        problems += requirements_problems(read(requirements), "REQUIREMENTS.md")
+        problems += file_problems(requirements, "REQUIREMENTS.md", requirements_problems)
     return problems
 
 
