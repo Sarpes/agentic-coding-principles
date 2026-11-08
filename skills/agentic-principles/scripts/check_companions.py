@@ -73,6 +73,8 @@ def installed(plugins_dir: Path, settings: Path) -> set[str]:
         enabled = json.loads(Path(settings).read_text(encoding="utf-8")).get("enabledPlugins", {})
     except (OSError, ValueError, AttributeError):
         return set()
+    if not isinstance(enabled, dict):
+        return set()
     found: set[str] = set()
     for key, on in enabled.items():
         plugin, _, market = key.partition("@")
@@ -102,8 +104,10 @@ def missing(rows: list[dict], available: set[str]) -> list[str]:
     out: list[str] = []
     for r in rows:
         if r["kind"] in NOT_LOOKED_UP:
-            continue
-        for name in _names(r):
+            names = [n for n in r.get("also", []) if ":" in n]
+        else:
+            names = _names(r)
+        for name in names:
             if name not in available and name not in out:
                 out.append(name)
     return out
@@ -118,7 +122,10 @@ def report(rows: list[dict], available: set[str]) -> list[str]:
     lines = []
     for name in absent:
         extra = f" (needs the {', '.join(needs[name])} tool in the session)" if name in needs else ""
-        lines.append(f"MISSING {name}{extra}: the fallback in companions.json applies")
+        lines.append(
+            f"MISSING {name}{extra}: not found in the plugin cache; confirm against the session's "
+            "skill list before using the fallback"
+        )
     for name, tools in needs.items():
         if name not in absent:
             lines.append(f"installed {name}: needs the {', '.join(tools)} tool in the session (not checkable here)")
@@ -130,7 +137,15 @@ def report(rows: list[dict], available: set[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     claude = Path(args[0]) if args else Path.home() / ".claude"
-    rows = load(COMPANIONS)
+    try:
+        rows = load(COMPANIONS)
+        problems = mapping_problems(rows)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        print(f"check_companions.py: cannot read {COMPANIONS.name}: {exc}")
+        return 0
+    if problems:
+        print(f"check_companions.py: {COMPANIONS.name} is malformed: {'; '.join(problems)}")
+        return 0
     for line in report(rows, installed(claude / "plugins", claude / "settings.json")):
         print(line)
     return 0
