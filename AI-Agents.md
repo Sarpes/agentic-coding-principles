@@ -105,3 +105,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** All of the fixes, and the reduced list of dependency file types for this version.
 - **What I changed or rejected, and why:** I kept the trust limit for this version, printed on every run, and kept the re-check at the next working session instead of a scheduled reminder.
 - **Where the AI was wrong, and how I noticed:** The approved design let empty content pass most gates, which three independent readers exposed and the author had not seen. The first round of fixes also carried errors of its own, including a test that could not pass as written and a template that would have raised a false alarm on every full-size project.
+
+### 14. Gate core: stages, evidence and overrides (2026-11-09)
+
+- **Prompt (or summary of it):** Build the first part of the stage gate script: read the stage table, check the evidence each passed stage names, and check the override log, test-first, using real temporary git repositories and not mocks.
+- **What the AI produced:** 130 tests written first against empty stubs (seen failing class by class), then the script, the stage and override templates and a marker on every worked example. D17 records the typed, per-stage evidence choice.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** A small edit to the test file, written through a shell here-document, turned a backslash-n into a real line break and broke the file; the first test run failed with a syntax error and the line was fixed with an editor call. The suite then passed on the first run, which proves little, so two rules were broken on purpose (any commit counts as history; the setup commit counts as after) and the matching tests went red.
