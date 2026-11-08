@@ -129,3 +129,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** A template test looked for the word "answer" and matched the AI's own message "compared the answers"; the check was loose, not the code. Of 43 rules broken on a throwaway copy, two survived (the manual-manifests path and a missing ownership file at stage 5) and got tests; one mutation matched two places and was rewritten to match one.
+
+### 17. Companions mapping and installed-skill checker (2026-11-09)
+
+- **Prompt (or summary of it):** Write the design's mapping of capabilities to installed skills, agents and commands as one data file, plus a checker that reports which of them are not installed or not enabled, test-first against stubs.
+- **What the AI produced:** 39 tests (24 failing and 1 erroring against stubs) in a first commit, then `companions.json` with the 30 rows of the design table, and `check_companions.py`, which reads the enabled-plugin list, takes the newest version folder of each plugin and takes skill names from each `SKILL.md` frontmatter.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first real run listed `anthropic-skills:deep-research` as missing although the session lists it; that skill does not come from the plugin cache, so the checker cannot see it. The report is therefore a prompt to compare with the session's own skill list, as the design already says.
