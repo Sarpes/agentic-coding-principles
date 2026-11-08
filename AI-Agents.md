@@ -73,3 +73,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: I have not reviewed this work yet; the owner reviews it at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews it at the pull request. The AI left P3.4, P1.3 and P1.7 unchanged, because the records it could read hold no measured effect for them; they are listed under "Not done (and why)".
 - **Where the AI was wrong, and how I noticed:** The AI tried to search an archived notes folder for the missing numbers and a local rule refused the command; it did not work around the refusal. Its first test edit declared a list with a needless inline assignment, which it noticed and removed before committing. One script it wrote through a shell heredoc printed a warning about a backslash; the run's assertion still passed, but a file should have been used.
+
+### 10. Releasing v0.1.1 (2026-11-08)
+
+- **Prompt (or summary of it):** Merge the backlog pull request and release 0.1.1 now.
+- **What the AI produced:** The merge of pull request 8, the changelog section for 0.1.1 and this entry, then the annotated tag and the GitHub release once CI on the release commit was green.
+- **What I kept:** None: I have not reviewed this step yet; the owner asked for the release and can check it on the release page.
+- **What I changed or rejected, and why:** None: the owner decided to release now, with P3.4, P1.3 and P1.7 still lacking a measured effect.
+- **Where the AI was wrong, and how I noticed:** Its first wait for CI after the merge picked up the run of the previous merge, because the new run had not registered yet, and reported success. The old run number and the blank conclusion of the new commit showed it; after that, runs were matched to the exact commit.

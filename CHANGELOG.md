@@ -4,6 +4,8 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+## [0.1.1] - 2026-11-08
+
 - `checks/check_docs.py`: a file that is not valid UTF-8 is reported at the line of the bad byte instead of crashing the gate.
 - `checks/check_docs.py`: backtick fences follow the renderer's rules, and an unclosed fence is reported at its opening line.
 - `checks/check_docs.py`: a value written on the line below its label gets a message that says so.
