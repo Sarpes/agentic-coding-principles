@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 KINDS = ("skill", "agent", "command", "builtin", "local")
+COMPANIONS = Path(__file__).resolve().parent.parent / "companions.json"
 NOT_LOOKED_UP = ("builtin", "local")
 
 
@@ -129,7 +130,7 @@ def report(rows: list[dict], available: set[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     claude = Path(args[0]) if args else Path.home() / ".claude"
-    rows = load(Path(__file__).resolve().parent.parent / "companions.json")
+    rows = load(COMPANIONS)
     for line in report(rows, installed(claude / "plugins", claude / "settings.json")):
         print(line)
     return 0

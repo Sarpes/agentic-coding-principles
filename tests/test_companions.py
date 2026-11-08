@@ -8,12 +8,14 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skills" / "agentic-principles"
 sys.path.insert(0, str(SKILL / "scripts"))
 
+import check_companions  # noqa: E402
 from check_companions import (  # noqa: E402
     installed,
     load,
@@ -171,7 +173,7 @@ class TestInstalled(unittest.TestCase):
 
     def test_temp_git_folder_is_ignored(self):
         self.m.skill("1.0", "s")
-        self.m.skill("temp_git_1", "junk")
+        self.m.skill("temp_git_99", "junk")
         self.assertEqual(installed(self.m.plugins, self.m.settings), {"p:s"})
 
     def test_only_newest_version_counts(self):
@@ -214,6 +216,18 @@ class TestMissing(unittest.TestCase):
         ]
         self.assertEqual(missing(rows, set()), [])
 
+    def test_plugin_name_in_also_of_a_builtin_row_is_checked(self):
+        r = row(primary="run", kind="builtin", also=["example-skills:webapp-testing"])
+        self.assertEqual(missing([r], set()), ["example-skills:webapp-testing"])
+
+    def test_plugin_name_in_also_of_a_local_row_present_is_not_reported(self):
+        r = row(primary="repo-kickoff", kind="local", also=["q:t"])
+        self.assertEqual(missing([r], {"q:t"}), [])
+
+    def test_plain_word_in_also_of_a_builtin_row_is_not_looked_up(self):
+        r = row(primary="run", kind="builtin", also=["plainword"])
+        self.assertEqual(missing([r], set()), [])
+
     def test_every_also_name_is_checked(self):
         r = row(also=["q:t", "r:u"])
         self.assertEqual(missing([r], {"p:s", "r:u"}), ["q:t"])
@@ -235,6 +249,12 @@ class TestReport(unittest.TestCase):
         text = "\n".join(report([r], {"p:s"}))
         self.assertIn("Workflow", text)
 
+    def test_missing_line_says_to_confirm_against_the_session_list(self):
+        text = " ".join(report([row()], set()))
+        self.assertIn("plugin cache", text)
+        self.assertIn("session", text)
+        self.assertNotIn("fallback in companions.json applies", text)
+
     def test_nothing_missing_and_no_requires_prints_a_clean_line(self):
         lines = report([row()], {"p:s"})
         self.assertEqual(len(lines), 1)
@@ -252,6 +272,47 @@ class TestMain(unittest.TestCase):
             code = main([str(m.claude)])
         self.assertEqual(code, 0)
         self.assertIn("superpowers:brainstorming", out.getvalue())
+
+
+class TestMainNeverRaises(unittest.TestCase):
+    def test_malformed_companions_file_prints_and_exits_zero(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        bad = Path(tmp.name) / "companions.json"
+        bad.write_text("{not json", encoding="utf-8")
+        out = io.StringIO()
+        with mock.patch.object(check_companions, "COMPANIONS", bad), contextlib.redirect_stdout(out):
+            code = main([tmp.name])
+        self.assertEqual(code, 0)
+        self.assertIn("companions.json", out.getvalue())
+
+    def test_list_valued_enabled_plugins_gives_empty_set(self):
+        m = Machine()
+        self.addCleanup(m.close)
+        m.skill("1.0", "s")
+        m.settings.write_text(json.dumps({"enabledPlugins": ["p@m"]}), encoding="utf-8")
+        self.assertEqual(installed(m.plugins, m.settings), set())
+
+    def test_list_valued_enabled_plugins_does_not_stop_main(self):
+        m = Machine()
+        self.addCleanup(m.close)
+        m.settings.write_text(json.dumps({"enabledPlugins": ["p@m"]}), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = main([str(m.claude)])
+        self.assertEqual(code, 0)
+        self.assertIn("MISSING", out.getvalue())
+
+    def test_valid_companions_file_still_reports(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        good = Path(tmp.name) / "companions.json"
+        good.write_text(json.dumps([row()]), encoding="utf-8")
+        out = io.StringIO()
+        with mock.patch.object(check_companions, "COMPANIONS", good), contextlib.redirect_stdout(out):
+            code = main([tmp.name])
+        self.assertEqual(code, 0)
+        self.assertIn("p:s", out.getvalue())
 
 
 if __name__ == "__main__":
