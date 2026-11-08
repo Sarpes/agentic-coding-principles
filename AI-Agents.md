@@ -89,3 +89,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The scope I chose from the two options the AI offered: the notes go and all 20 principles stay.
 - **What I changed or rejected, and why:** I rejected removing the three principles.
 - **Where the AI was wrong, and how I noticed:** The AI told the owner that entries 5 to 7 were waiting for review, but entry 6 was already filled; it had copied the range from a handover and noticed when it opened the entries.
+
+### 12. Designing the skill (2026-11-09)
+
+- **Prompt (or summary of it):** Turn this repository into a skill that guides a person without engineering training through strict software engineering practice, working hand in hand with the installed third-party skills.
+- **What the AI produced:** A design reached in question rounds after reading the installed skills and a past project: a conductor over eight stages, a size and method choice, a test ladder, a living architecture document, a cited checklist, a go-live review and saved overrides. An independent reviewer read it cold and raised six questions; three were settled as the designer's calls and three went to the owner. D15, D16 and `docs/design-skill.md`.
+- **What I kept:** The conductor shape, the two rule layers, the ladder and the installed-skill mapping.
+- **What I changed or rejected, and why:** I shortened the re-check of my understanding from about 30 days to within the week, asked for a proper README naming the third-party skills, made adoption optional for earlier projects except one, and ruled that publishing does not wait for my full explanation round on that project.
+- **Where the AI was wrong, and how I noticed:** Its first draft left open what counts as evidence and let a gap in understanding go unblocked, which would have allowed the anti-goal of passing every gate without understanding the project; the independent reviewer found both. It also proposed that the release wait for the owner's full explanation round, and I rejected that.
