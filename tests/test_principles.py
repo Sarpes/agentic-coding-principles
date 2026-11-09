@@ -21,7 +21,7 @@ PRINCIPLES = ROOT / "principles"
 STAGE_FILES = ("00-intake.md", "01-design.md", "02-plan.md", "03-build.md",
                "04-verify.md", "05-ship.md", "06-own.md", "07-retro.md")
 FIELDS = ("Rule", "Why (incident)", "How to check", "Enforced by")
-ENFORCERS = ("template", "check_docs", "CI", "human gate", "pre-commit hook", "contract hook (planned, v0.2)")
+ENFORCERS = ("template", "check_docs", "CI", "human gate", "pre-commit hook", "contract hook (planned)")
 # Files that state the current total; the changelog and the logs record what was true at the time.
 COUNT_FILES = ("README.md", "principles/README.md")
 EMPTY_STAGE = "awaiting a real incident"
@@ -156,7 +156,8 @@ class HelperTests(unittest.TestCase):
 
     def test_enforcer_kinds(self):
         self.assertEqual(enforcer_problems("template + check_docs"), [])
-        self.assertEqual(enforcer_problems("check_docs + contract hook (planned, v0.2)"), [])
+        self.assertEqual(enforcer_problems("check_docs + contract hook (planned)"), [])
+        self.assertEqual(enforcer_problems("contract hook (planned, v0.2)"), ["contract hook (planned, v0.2)"])
         self.assertEqual(enforcer_problems("process"), ["process"])
         self.assertEqual(enforcer_problems("contract hook"), ["contract hook"])
 
