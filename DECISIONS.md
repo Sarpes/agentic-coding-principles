@@ -142,6 +142,26 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** These three principles carry less evidence than the others, so a reader takes the event on trust.
 - **What would make you change it:** A recovered number goes into the principle.
 
+### D15. The skill is a conductor over installed skills
+
+- **Context:** The repository's knowledge is passive and assumes the reader already knows when something is wrong. The owner is not a software engineer by training and already has capable third-party skills installed, none of which decides what runs when or stops the work.
+- **Options considered:** (a) leave the repository as a reference; (b) a skill that writes its own guidance for every technique; (c) a conductor that calls installed skills at each stage and adds gates, evidence and plain-language guidance, with a fallback for a missing skill.
+- **Chosen:** (c), described in `docs/design-skill.md`.
+- **Why:** The owner asked for the skill to work hand in hand with the installed skills. The techniques already exist and are maintained by others; what is missing is sequence, evidence and refusal to move on without proof.
+- **Rejected:** (a), because it needs the engineering judgement the owner is still building; (b), because it would duplicate others' work and drift from it.
+- **Cost / trade-off:** The skill depends on names it does not control, so a renamed skill breaks a mapping until `companions.json` is updated. Its instructions can be ignored by an agent, so approvals rest on trust until a tool-call hook exists.
+- **What would make you change it:** A companion that disappears or is repeatedly misused would be replaced by this repository's own guidance for that step.
+
+### D16. Two rule layers: incident-backed principles and a cited checklist
+
+- **Context:** The design's anti-goal forbids rules without an incident, but the owner needs the skill to bring up practices never personally met, which by definition have no incident.
+- **Options considered:** (a) keep incidents as the only source and accept the blind spots; (b) drop the incident requirement; (c) keep principles incident-backed and add a separate checklist in which every item cites a recognised source.
+- **Chosen:** (c), by the owner. The anti-goal now applies to principles only.
+- **Why:** It covers what the owner does not know without weakening the promise behind the principles, and a reader can always tell which kind of rule is in front of them.
+- **Rejected:** (a), because the rules the owner most needs are the ones not yet learned the hard way; (b), because it invites invented best practices.
+- **Cost / trade-off:** Two lists to maintain, and each checklist source has to be read and cited when the item is written.
+- **What would make you change it:** A checklist item later backed by a real incident moves to the principles.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
