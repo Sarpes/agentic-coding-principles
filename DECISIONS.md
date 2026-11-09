@@ -1,6 +1,6 @@
 # Decisions
 
-Decision log for Agentic Coding Principles. Each decision has seven fields; none is left blank. Where a field does not apply, it says `None:` and gives the reason.
+Decision log for Agentic Engineering Principles (D24 records the rename). Each decision has seven fields; none is left blank. Where a field does not apply, it says `None:` and gives the reason.
 
 ### D1. Standalone public repository
 
@@ -231,6 +231,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Rejected:** (b), because rules spread over functions are harder to review and to keep in step with the go-live listing; (c), because a false trait on Small refuses the size and pushes the owner into the Full process for no reason; (e), because it contradicts the design by one day.
 - **Cost / trade-off:** The table cannot express a rule that needs two signals at once (for example a dependency only together with a folder). A container file with an unusual name, such as `docker/app.containerfile`, is not detected and must be declared on the `Traits:` line. The reminder is one day later than it was.
 - **What would make you change it:** A real project whose container or other trait the table misses, or a trait that needs two signals, would justify a richer rule shape with its own entry.
+
+### D24. Rename to Agentic Engineering Principles; the skill keeps its short name
+
+- **Context:** The repository was called Agentic Coding Principles. "Agentic coding" says only that an agent does the work; the point of this repository is that the work is held to engineering discipline. The owner chose the new name and supplied a logo, and asked for the rename to reach everywhere: text, the GitHub repository, the local folder, the project registry, the private companion and the plugin.
+- **Options considered:** (a) rename the display name only; (b) rename the text and the GitHub repository; (c) rename everything, including the plugin and marketplace; (d) as (c) and also rename the skill from `agentic-principles`.
+- **Chosen:** (c), by the owner. The skill keeps the name `agentic-principles`.
+- **Why:** One name everywhere avoids a reader meeting two names for one thing. GitHub redirects a renamed repository, so old links and clones keep working. The skill's short name is what projects already load and what their CLAUDE.md block names, so changing it would break them for no gain.
+- **Rejected:** (a) and (b), because the old name would survive in the folder, registry and plugin; (d), because every project block and many paths would have to change.
+- **Cost / trade-off:** The plugin name and the skill name differ, which the README states. Released history (the 0.1.x changelog, D1 to D23, the AI log, the v0.1 design and plan) keeps the old name as written. The local folder and the private companion are renamed outside this repository.
+- **What would make you change it:** None: the owner chose the name; only a name clash on a public marketplace would reopen it.
 
 ## Assumptions
 

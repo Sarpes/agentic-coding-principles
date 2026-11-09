@@ -209,3 +209,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The earlier rounds tested each check with hand-made fixtures and never ran the real templates through the gate, so the marker inside every template's own comment went unnoticed until a reviewer filled one in; the walk now does what an owner does. Two existing tests had written the old adoption anchor into the suite as correct behaviour and had to be inverted under the new ruling. One edit script written through a shell here-document lost its backslashes, as the owner's rules warn; it stopped on its own match check and wrote nothing, and the edit was redone with the editing tool.
+
+### 27. Renaming to Agentic Engineering Principles and adding the logo (2026-11-09)
+
+- **Prompt (or summary of it):** Use the supplied logo and rename the project to Agentic Engineering Principles, everywhere.
+- **What the AI produced:** It asked how far the rename should reach and where the logo file was, then wrote failing tests for the new plugin and marketplace name, the repository address, the README title and logo, and the absence of the old name in the current files; then the changes, D24 and a changelog line.
+- **What I kept:** The rename everywhere, the logo at the top of the README, and the short skill name `agentic-principles`.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** Its first edit of CLAUDE.md added a note "renamed from" the old name, which the new test immediately flagged; the history moved to D24, where it belongs.

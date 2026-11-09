@@ -207,7 +207,8 @@ class LanguageTest(unittest.TestCase):
 class ManifestTest(unittest.TestCase):
     def test_plugin_json(self):
         data = json.loads(read(PLUGIN))
-        self.assertEqual(data["name"], "agentic-principles")
+        self.assertEqual(data["name"], "agentic-engineering-principles")
+        self.assertEqual(data["repository"], "https://github.com/Sarpes/agentic-engineering-principles")
         self.assertEqual(data["version"], VERSION)
         self.assertEqual(data["skills"], ["./skills/agentic-principles"])
         for rel in data["skills"]:
@@ -216,11 +217,31 @@ class ManifestTest(unittest.TestCase):
 
     def test_marketplace_json(self):
         data = json.loads(read(MARKETPLACE))
+        self.assertEqual(data["name"], "agentic-engineering-principles")
         self.assertEqual(data["metadata"]["version"], VERSION)
         plugins = data["plugins"]
-        self.assertEqual([p["name"] for p in plugins], ["agentic-principles"])
+        self.assertEqual([p["name"] for p in plugins], ["agentic-engineering-principles"])
         self.assertEqual(plugins[0]["version"], VERSION)
         self.assertTrue((ROOT / plugins[0]["source"]).is_dir())
+
+
+class NameAndLogoTest(unittest.TestCase):
+    """The project is called Agentic Engineering Principles; the old name survives only in history."""
+
+    README = ROOT / "README.md"
+    LOGO = "docs/assets/logo.jpg"
+
+    def test_readme_title_and_logo(self):
+        text = read(self.README)
+        self.assertTrue(text.startswith("# Agentic Engineering Principles"), text[:60])
+        self.assertIn(f"]({self.LOGO})", text)
+        self.assertTrue((ROOT / self.LOGO).is_file(), self.LOGO)
+
+    def test_current_files_use_the_new_name(self):
+        old = re.compile(r"agentic[- ]coding[- ]principles", re.I)
+        for name in ("README.md", "CLAUDE.md", ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"):
+            with self.subTest(file=name):
+                self.assertEqual(old.findall(read(ROOT / name)), [])
 
 
 if __name__ == "__main__":
