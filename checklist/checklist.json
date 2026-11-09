@@ -1,0 +1,261 @@
+[
+  {
+    "id": "C-TEST-1",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-TEST-2",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-TEST-3",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-TEST-4",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-TEST-5",
+    "applies_when": [
+      "database",
+      "paid-api",
+      "llm"
+    ]
+  },
+  {
+    "id": "C-TEST-6",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-TEST-7",
+    "applies_when": [
+      "database"
+    ]
+  },
+  {
+    "id": "C-SEC-1",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-SEC-2",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-SEC-3",
+    "applies_when": [
+      "web",
+      "personal-data"
+    ]
+  },
+  {
+    "id": "C-SEC-4",
+    "applies_when": [
+      "database",
+      "web"
+    ]
+  },
+  {
+    "id": "C-SEC-5",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-SEC-6",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-SEC-7",
+    "applies_when": [
+      "container"
+    ]
+  },
+  {
+    "id": "C-SEC-8",
+    "applies_when": [
+      "web",
+      "container",
+      "database"
+    ]
+  },
+  {
+    "id": "C-DEP-1",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-DEP-2",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-DEP-3",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-DEP-4",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-OPS-1",
+    "applies_when": [
+      "container",
+      "web",
+      "scheduled"
+    ]
+  },
+  {
+    "id": "C-OPS-2",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-OPS-3",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-OPS-4",
+    "applies_when": [
+      "web",
+      "scheduled"
+    ]
+  },
+  {
+    "id": "C-OPS-5",
+    "applies_when": [
+      "database"
+    ]
+  },
+  {
+    "id": "C-OPS-6",
+    "applies_when": [
+      "always"
+    ]
+  },
+  {
+    "id": "C-OPS-7",
+    "applies_when": [
+      "paid-api",
+      "llm",
+      "database"
+    ]
+  },
+  {
+    "id": "C-OPS-8",
+    "applies_when": [
+      "paid-api",
+      "llm",
+      "database"
+    ]
+  },
+  {
+    "id": "C-OPS-9",
+    "applies_when": [
+      "scheduled",
+      "paid-api"
+    ]
+  },
+  {
+    "id": "C-OPS-10",
+    "applies_when": [
+      "container",
+      "web",
+      "scheduled"
+    ]
+  },
+  {
+    "id": "C-OPS-11",
+    "applies_when": [
+      "container",
+      "web",
+      "scheduled"
+    ]
+  },
+  {
+    "id": "C-DATA-1",
+    "applies_when": [
+      "database"
+    ]
+  },
+  {
+    "id": "C-DATA-2",
+    "applies_when": [
+      "database"
+    ]
+  },
+  {
+    "id": "C-DATA-3",
+    "applies_when": [
+      "personal-data"
+    ]
+  },
+  {
+    "id": "C-DATA-4",
+    "applies_when": [
+      "web"
+    ]
+  },
+  {
+    "id": "C-AI-1",
+    "applies_when": [
+      "llm"
+    ]
+  },
+  {
+    "id": "C-AI-2",
+    "applies_when": [
+      "llm"
+    ]
+  },
+  {
+    "id": "C-AI-3",
+    "applies_when": [
+      "llm"
+    ]
+  },
+  {
+    "id": "C-AI-4",
+    "applies_when": [
+      "llm",
+      "paid-api"
+    ]
+  },
+  {
+    "id": "C-AI-5",
+    "applies_when": [
+      "llm"
+    ]
+  },
+  {
+    "id": "C-AI-6",
+    "applies_when": [
+      "llm"
+    ]
+  }
+]
