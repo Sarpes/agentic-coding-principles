@@ -135,6 +135,38 @@ class HelperTests(unittest.TestCase):
         self.assertIsNone(section_text("# T\n\n## Other\n\nx\n"))
 
 
+def table_problems(text: str) -> list[str]:
+    """Every Markdown table whose delimiter row has a different cell count than its header."""
+    problems = []
+    lines = text.split("\n")
+    fence = False
+    for i, line in enumerate(lines[:-1]):
+        if line.startswith("```"):
+            fence = not fence
+        nxt = lines[i + 1]
+        if fence or not line.startswith("|") or not re.fullmatch(r"\|[ :|-]*-[ :|-]*\|", nxt):
+            continue
+        head, delim = line.strip().strip("|").split("|"), nxt.strip().strip("|").split("|")
+        if len(head) != len(delim):
+            problems.append(f"line {i + 1}: header has {len(head)} cells, delimiter row {len(delim)}")
+    return problems
+
+
+class TableTests(unittest.TestCase):
+    def test_mismatched_delimiter_fires(self):
+        self.assertEqual(table_problems("| a | b | c |\n|---|---|---|---|\n| 1 | 2 | 3 |\n"),
+                         ["line 1: header has 3 cells, delimiter row 4"])
+
+    def test_matching_delimiter_passes(self):
+        self.assertEqual(table_problems("| a | b |\n|---|---|\n| 1 | 2 |\n"), [])
+
+    def test_pipe_lines_that_are_not_tables_pass(self):
+        self.assertEqual(table_problems("| not a table |\nplain text\n"), [])
+
+    def test_every_table_in_the_readme_is_well_formed(self):
+        self.assertEqual(table_problems(read(README)), [])
+
+
 class RealReadmeTests(unittest.TestCase):
     def setUp(self):
         self.readme = read(README)
