@@ -49,6 +49,19 @@ def frontmatter(text: str) -> dict:
     return {}
 
 
+def description_trigger_hits(description: str) -> list[str]:
+    """Stub until the fix commit: the trigger phrases found in a description."""
+    return []
+
+
+def section(text: str, heading: str) -> list[str]:
+    """The lines under a level-two heading, up to the next one."""
+    lines = text.splitlines()
+    start = lines.index(heading) + 1
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return lines[start:end]
+
+
 def companions() -> list[dict]:
     return json.loads(read(COMPANIONS))
 
@@ -84,13 +97,14 @@ class FrontmatterTest(unittest.TestCase):
         self.assertLessEqual(len(desc), 1024)
 
     def test_description_avoids_repo_kickoff_triggers(self):
-        desc = frontmatter(read(SKILL)).get("description", "").lower()
-        hits = [t for t in KICKOFF_TRIGGERS if t in desc]
-        self.assertEqual(hits, [])
+        self.assertEqual(description_trigger_hits(frontmatter(read(SKILL)).get("description", "")), [])
 
     def test_trigger_check_can_fire(self):
-        self.assertIn("start a task", "please start a task now".lower())
-        self.assertTrue(any(t in "use when you open a pr" for t in KICKOFF_TRIGGERS))
+        self.assertEqual(description_trigger_hits("Use when asked to Start a Task or to open a PR"),
+                         ["start a task", "open a pr"])
+
+    def test_trigger_check_leaves_a_clean_description_alone(self):
+        self.assertEqual(description_trigger_hits("Use when a project runs under staged gates"), [])
 
 
 class RouterTest(unittest.TestCase):
@@ -109,6 +123,21 @@ class RouterTest(unittest.TestCase):
     def test_router_has_the_repo_kickoff_overlap_row(self):
         rows = [line for line in read(SKILL).splitlines() if line.startswith("|") and "repo-kickoff" in line]
         self.assertTrue(rows, "no overlap row naming repo-kickoff")
+
+    def session_start(self):
+        return section(read(SKILL), "## Every session starts here")
+
+    def test_session_start_runs_the_gate_as_a_numbered_step(self):
+        self.assertTrue([line for line in self.session_start() if re.match(r"\d+\. .*check_gates\.py", line)])
+
+    def test_companion_report_is_only_a_hint(self):
+        line = next(line for line in self.session_start() if "check_companions.py" in line).lower()
+        self.assertIn("hint", line)
+        self.assertIn("session's own skill list", line)
+
+    def test_new_project_runs_setup_before_stage_0(self):
+        line = next(line for line in self.session_start() if "**Start:**" in line)
+        self.assertLess(line.index("init_project.py"), line.index("Stage 0"))
 
     def test_router_companions_exist_in_mapping(self):
         unknown = named_companions(read(SKILL)) - all_names()
@@ -141,6 +170,10 @@ class StageFilesTest(unittest.TestCase):
                 if n in row["stages"]:
                     with self.subTest(name=name, primary=row["primary"]):
                         self.assertIn(f"`{row['primary']}`", text)
+
+    def test_design_questions_are_answered_in_the_owners_words(self):
+        step = next(line for line in section(read(STAGES / "01-design.md"), "## Do") if line.startswith("1. "))
+        self.assertIn("own words", step)
 
     def test_stage_specific_content(self):
         wanted = {
