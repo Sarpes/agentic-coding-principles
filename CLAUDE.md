@@ -8,6 +8,7 @@ Agentic Coding Principles: rules, stage gates, templates and a tested documentat
 README.md  LICENSE  CHANGELOG.md  CLAUDE.md
 DECISIONS.md           this repository's decisions (seven fields each)
 AI-Agents.md           this repository's AI usage log (five fields each)
+RESULTS.md             measurements of this repository's own scripts: rules removed on a copy, clean clone
 principles/            index plus one file per stage (00-intake ... 07-retro)
 templates/             DECISIONS, AI-Agents, REQUIREMENTS, BUILD-LEDGER, RESULTS, HANDOVER, GLOSSARY, PR template
 checks/check_docs.py   the documentation gate (CLI)
