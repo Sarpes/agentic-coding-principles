@@ -927,7 +927,7 @@ def doc(map=None, deps=None, tests=None, comps=None, override=None, manual=None)
         return f"## {heading}\n\n{top}{body}"
     out = ["# Architecture\n", "## Diagram\n\nA to B\n"]
     if comps is not None:
-        out.append("## Components\n\n" + md_table(COMP_COLS, [(c, "does work") for c in comps]))
+        out.append(section("Components", md_table(COMP_COLS, [(c, "does work") for c in comps])))
     if map is not None:
         out.append(section("File map", md_table(MAP_COLS, [(m, "a file") if isinstance(m, str) else m
                                                             for m in map])))
@@ -1490,6 +1490,13 @@ class TraitRules(GitCase):
             with self.subTest(name=name):
                 self.assertEqual(self.detect([name]), {"container"})
 
+    def test_documents_and_other_tools_named_like_containers_are_not_containers(self):
+        for name in ("Dockerfile.md", "docs/Dockerfile.txt", "composer.yml", "composer.yaml", "compose.yml.md",
+                     "docker-composer.yml"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), set())
+                self.assertEqual(size_problems(parse_stages(table()), [name], set()), [])
+
     def test_look_alike_names_are_not_containers(self):
         for name in ("README.md", "compose.txt", "composer.json", "docs/Dockerfile-notes.md", "compose.py"):
             with self.subTest(name=name):
@@ -2050,8 +2057,9 @@ class RecheckNote(unittest.TestCase):
         self.assertIn("re-check", note)
         self.assertIn("2026-01-08", note)
 
-    def test_the_due_day_itself_is_noted(self):
-        self.assertIn("re-check", recheck_note(self.lines("2026-01-08"), date(2026, 1, 8)))
+    def test_the_due_day_itself_is_silent(self):
+        """Design section 7: the re-check is asked the first time the owner works in the project after that date."""
+        self.assertIsNone(recheck_note(self.lines("2026-01-08"), date(2026, 1, 8)))
 
     def test_a_recheck_not_yet_due_is_silent(self):
         self.assertIsNone(recheck_note(self.lines("2026-01-08"), date(2026, 1, 7)))
@@ -2661,6 +2669,179 @@ class RungCellRules(GitCase):
         problems = tt_problems(doc_text, "full", {"REQ-1"}, {}, ls(self.root), self.root, {})
         self.assertEqual(sorted(m.split(":")[1].strip() for m in messages(problems) if "cannot be rung" in m),
                          ["rung 1 (Written first)", "rung 2 (Catches breakage)"], problems)
+
+
+class ComponentSectionRules(GitCase):
+    """A missing or empty Components section must not silently drop every component from the ladder."""
+
+    TESTS = [trow("REQ-1", E, E, "", "", "")]
+
+    def problems(self, architecture, stages, extra=None):
+        files = {"STAGES.md": stages, "ARCHITECTURE.md": architecture, "REQUIREMENTS.md": REQ_OK, E: "x = 1\n"}
+        files.update(extra or {})
+        root = self.make_repo(files)
+        return [p for p in check_project(root)[0] if p.file == "ARCHITECTURE.md"]
+
+    def at4(self):
+        return table(row(4, "passed", "file:ARCHITECTURE.md"))
+
+    def test_a_missing_components_section_fires_at_stage_4(self):
+        self.assert_mentions(self.problems(doc(tests=self.TESTS), self.at4()), "## Components")
+
+    def test_an_empty_components_table_fires_at_stage_4(self):
+        problems = self.problems(doc(comps=[], tests=self.TESTS), self.at4())
+        self.assertTrue(any("Components" in m and "no rows" in m for m in messages(problems)), problems)
+
+    def test_a_missing_components_section_fires_at_stage_5(self):
+        stages = table(row(5, "passed", "file:OWNERSHIP.md"))
+        self.assert_mentions(self.problems(doc(map=[], deps=[]), stages), "## Components")
+
+    def test_a_missing_components_section_is_not_judged_before_stage_4(self):
+        self.assertEqual(self.problems(doc(tests=self.TESTS), table()), [])
+
+    def test_a_filled_components_table_passes(self):
+        tests = self.TESTS + [trow("Parser", E, E, "", "", "")]
+        self.assertFalse(any("Components" in m for m in messages(self.problems(doc(comps=["Parser"], tests=tests),
+                                                                                self.at4()))))
+
+    def test_an_open_override_for_stage_4_silences_an_empty_table(self):
+        text = doc(tests=self.TESTS) + "\n## Components\n\nOverride: O1\n\n| Component | What it does |\n|---|---|\n"
+        extra = {"OVERRIDES.md": overrides_doc(entry(1, stage="4 Verify"))}
+        self.assertFalse(any("Components" in m for m in messages(self.problems(text, self.at4(), extra))))
+
+
+class ArchivedEvidenceRules(GitCase):
+    """docs/archive/ holds earlier cycles' records: never a design file, and an archived STAGES file is never evidence."""
+
+    def test_an_archived_file_is_not_the_full_design(self):
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/archive/design.md": "old design\n"})
+        r = Row(10, STAGE_NAMES[1], "passed", "file:DECISIONS.md,file:docs/archive/design.md", "-")
+        self.assert_mentions(evidence_content_problems(1, "full", root, ls(root), r, None), "design")
+
+    def test_a_design_file_beside_the_archive_still_counts(self):
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n"})
+        r = Row(10, STAGE_NAMES[1], "passed", "file:DECISIONS.md,file:docs/design.md", "-")
+        self.assertEqual(evidence_content_problems(1, "full", root, ls(root), r, None), [])
+
+    def test_an_archived_stages_file_is_never_evidence(self):
+        root = self.make_repo({"docs/archive/STAGES-cycle-1.md": STAGES_OPEN})
+        found = check_gates.evidence_item_problems("file", "docs/archive/STAGES-cycle-1.md", root, set(ls(root)))
+        self.assertTrue(any("own record" in m for m in found), found)
+
+    def test_another_archived_file_may_be_evidence(self):
+        root = self.make_repo({"docs/archive/notes.md": "notes\n"})
+        self.assertEqual(check_gates.evidence_item_problems("file", "docs/archive/notes.md", root, set(ls(root))), [])
+
+
+class BuildCommitRules(GitCase):
+    """Stage 3's commit must change something other than the gate's own records."""
+
+    def check(self, files=None, remove=()):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        later = commit(root, files, "later", remove=remove)
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{later},file:BUILD-LEDGER.md", "-")
+        return evidence_content_problems(3, "small", root, ls(root), r, setup)
+
+    def test_a_commit_that_changes_only_gate_records_fires(self):
+        for files in ({"STAGES.md": table(row(0, "passed", "file:REQUIREMENTS.md"))},
+                      {"OVERRIDES.md": "# Overrides\n"},
+                      {"docs/archive/STAGES-cycle-1.md": STAGES_OPEN},
+                      {"STAGES.md": table(cycle=1, extra=("Traits: none",)), "OVERRIDES.md": "# o\n"}):
+            with self.subTest(files=sorted(files)):
+                self.assert_mentions(self.check(files), "gate's own records")
+
+    def test_an_empty_commit_fires(self):
+        self.assert_mentions(self.check(), "gate's own records")
+
+    def test_a_commit_that_also_changes_code_passes(self):
+        self.assertEqual(self.check({"STAGES.md": table(extra=("Traits: none",)), "app.py": "x = 1\n"}), [])
+
+    def test_a_commit_that_removes_a_source_file_passes(self):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK, "old.py": "x = 1\n"})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        later = commit(root, remove=("old.py",), message="remove old code")
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{later},file:BUILD-LEDGER.md", "-")
+        self.assertEqual(evidence_content_problems(3, "small", root, ls(root), r, setup), [])
+
+
+class CaseSpellingRules(GitCase):
+    def test_a_case_only_mismatch_names_the_tracked_spelling(self):
+        root = self.make_repo({"Requirements.md": REQ_OK})
+        found = check_gates.evidence_item_problems("file", "requirements.md", root, set(ls(root)))
+        self.assertTrue(any("tracked as Requirements.md" in m for m in found), found)
+
+    def test_the_tracked_spelling_passes(self):
+        root = self.make_repo({"Requirements.md": REQ_OK})
+        self.assertEqual(check_gates.evidence_item_problems("file", "Requirements.md", root, set(ls(root))), [])
+
+    def test_a_file_that_is_not_tracked_in_any_spelling_keeps_its_message(self):
+        root = self.make_repo()
+        write(root, "notes.md", "x\n")
+        found = check_gates.evidence_item_problems("file", "notes.md", root, set(ls(root)))
+        self.assertTrue(any("not tracked by git" in m for m in found), found)
+
+
+class DeferredFindingRules(GitCase):
+    """Small findings deferred during the build and taken in the final fix wave."""
+
+    def test_a_duplicate_field_label_in_an_override_is_reported_at_its_second_line(self):
+        root = self.make_repo()
+        text = overrides_doc(entry(1)).replace("- **Status:** open\n", "- **Status:** open\n- **Status:** closed\n")
+        problems = override_problems(text, root, parse_stages(STAGES_OPEN))
+        second = text.split("\n").index("- **Status:** closed") + 1
+        self.assertIn(second, [p.line for p in problems if "twice" in p.message], problems)
+
+    def test_an_override_with_each_label_once_has_no_duplicate_problem(self):
+        root = self.make_repo()
+        problems = override_problems(overrides_doc(entry(1)), root, parse_stages(STAGES_OPEN))
+        self.assertFalse(any("twice" in m for m in messages(problems)), problems)
+
+    def test_a_bare_traits_line_is_a_problem_at_its_line(self):
+        text = table(extra=("Traits:",))
+        stages = parse_stages(text)
+        self.assertIn(line_of(text, "Traits:"), [n for n, m in stages.errors if "Traits" in m], stages.errors)
+        self.assertIsNone(stages.traits)
+
+    def test_traits_none_is_still_valid(self):
+        stages = parse_stages(table(extra=("Traits: none",)))
+        self.assertEqual((stages.traits, stages.errors), (set(), []))
+
+    def merge_repo(self, branch_files):
+        """main with a README; a side branch adds `branch_files`; a merge commit (no fast-forward) brings it in."""
+        root = self.make_repo({"README.md": "# p\n"})
+        main = git(root, "rev-parse", "--abbrev-ref", "HEAD")
+        git(root, "switch", "-q", "-c", "side")
+        commit(root, branch_files, "side work")
+        git(root, "switch", "-q", main)
+        commit(root, {"NOTES.md": "n\n"}, "main moves on")
+        git(root, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        return root, git(root, "rev-parse", "HEAD")
+
+    def test_a_merge_commit_that_brings_in_source_counts_as_the_hand_change(self):
+        root, merge = self.merge_repo({"src/app.py": "x = 1\n"})
+        self.assertEqual(check_gates._hand_change_problems(root, merge, 3, "OWNERSHIP.md"), [])
+
+    def test_a_merge_commit_that_brings_in_only_documents_is_not_a_hand_change(self):
+        root, merge = self.merge_repo({"docs/a.md": "x\n"})
+        self.assertTrue(check_gates._hand_change_problems(root, merge, 3, "OWNERSHIP.md"))
+
+    def test_a_merge_commit_that_brings_in_code_counts_for_stage_3(self):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        main = git(root, "rev-parse", "--abbrev-ref", "HEAD")
+        git(root, "switch", "-q", "-c", "side")
+        commit(root, {"app.py": "x = 1\n"}, "side work")
+        git(root, "switch", "-q", main)
+        commit(root, {"NOTES.md": "n\n"}, "main moves on")
+        git(root, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        merge = git(root, "rev-parse", "HEAD")
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{merge},file:BUILD-LEDGER.md", "-")
+        self.assertEqual(evidence_content_problems(3, "small", root, ls(root), r, setup), [])
+
+    def test_clean_lines_blanks_two_comments_in_one_text(self):
+        text = "a <!-- one --> b <!-- two --> c\n<!--\nthree\n-->\nkeep\n<!-- four\nfive -->\n"
+        self.assertEqual(check_gates.clean_lines(text), ["a  b  c", "", "", "", "keep", "", "", ""])
 
 
 class OverrideSurvivorRules(GitCase):
