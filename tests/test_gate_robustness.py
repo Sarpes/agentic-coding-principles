@@ -30,8 +30,8 @@ from check_gates import Problem, check_project  # noqa: E402
 import tests.test_check_gates as gate_tests  # noqa: E402  (module import: its test classes must not run twice)
 
 SEED = 20261109
-# 100 per file type keeps this test near 45 seconds (each run reads about 40 files from disk, 15 types in all).
-# The full 500 per type, the number the design asks for, takes about five minutes:
+# 100 per file type keeps this test near 35 seconds (each run reads about 40 files from disk, 15 types in all).
+# The full 500 per type, the number the design asks for, took 161 seconds when measured (RESULTS.md):
 #   ROBUSTNESS_PER_TYPE=500 python -m unittest tests.test_gate_robustness
 PER_TYPE = int(os.environ.get("ROBUSTNESS_PER_TYPE", "100"))
 SLOW_SECONDS = 5.0

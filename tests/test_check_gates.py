@@ -394,13 +394,14 @@ class CycleRules(GitCase):
                 new_work = commit(root, {"more.py": "y = 2\n"}, "work in cycle two")
                 self.assertFalse(any("after" in m for m in messages(self.stage3(root, new_work))))
 
-    def test_adopted_at_is_read_from_the_first_commit_of_the_current_cycle(self):
+    def test_adopted_at_in_a_later_cycle_fires_even_when_that_cycle_starts_with_it(self):
         root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
         commit(root, {"STAGES.md": table(row(0, "adopted"), row(1, "adopted"), extra=("Adopted-at: 2",))}, "one")
         rows = [row(n, "adopted") for n in range(4)]
         text = table(*rows, cycle=2, extra=("Adopted-at: 4",))
         commit(root, {"STAGES.md": text}, "second cycle in one commit")
-        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+        problems = stage_problems(text, root, ls(root), {})
+        self.assertIn(line_of(text, "Adopted-at: 4"), [p.line for p in problems if "cycle 1" in p.message], problems)
 
     def test_changing_adopted_at_inside_one_cycle_still_fires(self):
         root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
@@ -409,13 +410,13 @@ class CycleRules(GitCase):
         problems = stage_problems(text, root, ls(root), {})
         self.assertTrue(any("first commit" in m for m in messages(problems)), problems)
 
-    def test_the_source_before_adoption_check_looks_before_the_current_cycle_start(self):
+    def test_the_source_before_adoption_check_looks_before_the_first_commit_that_added_stages(self):
         root = self.make_repo({"README.md": "x\n"})
         commit(root, {"STAGES.md": table()}, "setup")
         commit(root, {"app.py": "x = 1\n"}, "code arrives in cycle one")
         text = table(*[row(n, "adopted") for n in range(2)], cycle=2, extra=("Adopted-at: 2",))
         commit(root, {"STAGES.md": text}, "second cycle with adoption")
-        self.assertFalse(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
+        self.assertTrue(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
 
     def test_adoption_with_no_source_before_the_current_cycle_start_fires(self):
         root = self.make_repo({"README.md": "x\n"})
@@ -479,6 +480,52 @@ class AdoptionRules(GitCase):
     def test_adopted_at_five_is_allowed(self):
         root = self.project(stages_text=self.adopted_table(5, 0, 1, 2, 3, 4))
         self.assertEqual(stage_problems(self.adopted_table(5, 0, 1, 2, 3, 4), root, ls(root), {}), [])
+
+    def test_hand_raising_the_cycle_to_adopt_a_new_project_fires(self):
+        """Review repro: init, then code, then Cycle: 2 and Adopted-at: 5 written by hand. Both guards used to pass."""
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(5)], cycle=2, extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "bump")
+        problems = check_project(root)[0]
+        self.assert_mentions(problems, "cycle 1")
+        self.assert_mentions(problems, "first commit")
+        self.assert_mentions(problems, "source")
+
+    def test_hand_adding_adopted_at_in_cycle_1_after_the_first_commit_still_fires(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(5)], extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "adopt by hand")
+        self.assert_mentions(check_project(root)[0], "first commit")
+
+    def test_a_genuine_adoption_in_cycle_1_passes(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"main.py": "print(1)\n"}, "code that existed before the process")
+        text = table(*[row(n, "adopted") for n in range(5)], extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "adopt at stage 5")
+        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+
+    def test_a_later_cycle_of_an_adopted_project_without_adopted_at_passes(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        commit(root, {"STAGES.md": table(*[row(n, "adopted") for n in range(2)], extra=("Adopted-at: 2",))}, "adopt")
+        text = table(cycle=2)
+        commit(root, {"STAGES.md": text}, "second cycle")
+        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+
+    def test_adoption_is_anchored_to_the_first_add_even_after_the_file_was_removed_and_added_again(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, remove=("STAGES.md",), message="remove")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(2)], extra=("Adopted-at: 2",))
+        commit(root, {"STAGES.md": text}, "add again with adoption")
+        problems = stage_problems(text, root, ls(root), {})
+        self.assert_mentions(problems, "first commit")
+        self.assert_mentions(problems, "source")
 
     def test_uncommitted_stages_file_asks_for_a_commit(self):
         root = self.make_repo({"app.py": "x = 1\n"})
@@ -631,6 +678,84 @@ class EvidenceRules(GitCase):
     def test_rules_apply_only_at_their_stage(self):
         root = self.make_repo({"AI-Agents.md": "# AI log\n", "DECISIONS.md": DECISIONS_OK})
         self.assertEqual(self.run_check(root, 1, "small", "file:AI-Agents.md,file:DECISIONS.md"), [])
+
+
+class MarkerRules(GitCase):
+    """The template marker counts only outside comments and code fences, and a bad evidence file is reported once."""
+
+    MARKED = "(EXAMPLE)"
+
+    def item(self, text, name="REQUIREMENTS.md"):
+        root = self.make_repo({name: text})
+        return check_gates.evidence_item_problems("file", name, root, set(ls(root)))
+
+    def about(self, problems, name):
+        return [p for p in problems if p.file == name or name in p.message]
+
+    def test_a_marker_in_a_table_row_is_refused(self):
+        found = self.item(f"| ID | Requirement |\n|---|---|\n| REQ-1 | It works. {self.MARKED} |\n")
+        self.assertTrue(any(self.MARKED in m for m in found), found)
+
+    def test_a_marker_only_inside_a_one_line_comment_is_not_refused(self):
+        text = f"<!-- rows marked {self.MARKED}: replace them -->\n| ID | Requirement |\n|---|---|\n| REQ-1 | It works. |\n"
+        self.assertEqual(self.item(text), [])
+
+    def test_a_marker_only_inside_a_multi_line_comment_is_not_refused(self):
+        text = (f"<!--\nThe rows below are worked examples, marked\n{self.MARKED}: replace them and remove the marker.\n"
+                "-->\n\n| ID | Requirement |\n|---|---|\n| REQ-1 | It works. |\n")
+        self.assertEqual(self.item(text), [])
+
+    def test_a_marker_after_a_closed_comment_on_the_same_line_is_refused(self):
+        found = self.item(f"<!-- note --> | REQ-1 | It works. {self.MARKED} |\n")
+        self.assertTrue(any(self.MARKED in m for m in found), found)
+
+    def test_an_empty_evidence_file_is_reported_once(self):
+        for stage, name in ((0, "REQUIREMENTS.md"), (1, "DECISIONS.md"), (3, "BUILD-LEDGER.md"), (7, "AI-Agents.md")):
+            with self.subTest(name=name):
+                root = self.make_repo({name: "\n"})
+                problems = stage_problems(table(row(stage, "passed", f"file:{name}")), root, ls(root), {})
+                self.assertEqual(len(self.about(problems, name)), 1, problems)
+
+    def test_a_marker_bearing_evidence_file_is_reported_once(self):
+        root = self.make_repo({"DECISIONS.md": f"# Decisions\n\nNothing decided yet {self.MARKED}\n"})
+        problems = stage_problems(table(row(1, "passed", "file:DECISIONS.md")), root, ls(root), {})
+        self.assertEqual(len(self.about(problems, "DECISIONS.md")), 1, problems)
+        self.assert_mentions(problems, self.MARKED)
+
+    def test_a_good_evidence_file_still_gets_its_content_rule(self):
+        root = self.make_repo({"DECISIONS.md": "# Decisions\n\nNothing decided yet.\n"})
+        problems = stage_problems(table(row(1, "passed", "file:DECISIONS.md")), root, ls(root), {})
+        self.assert_mentions(problems, "no decision entry")
+
+    def ownership_stage(self, stage, explain, full):
+        root = self.make_repo({"OWNERSHIP.md": ownership_doc(full=full, explain=explain)})
+        return stage_problems(table(row(stage, "passed", "file:OWNERSHIP.md")), root, ls(root), {})
+
+    def marked_rounds(self):
+        return [(f"Question {i}? {self.MARKED}", "An answer.", "-", "closed") for i in range(1, 4)]
+
+    def test_stage_5_does_not_judge_the_marker_in_the_full_round(self):
+        problems = self.ownership_stage(5, EB_OK, self.marked_rounds())
+        self.assertFalse(any(self.MARKED in m for m in messages(problems)), problems)
+
+    def test_stage_5_refuses_the_marker_in_the_explain_back(self):
+        explain = [EB_OK[0], EB_OK[1], ("how-to-recover", f"Question? {self.MARKED}", "An answer.", "-", "closed")]
+        self.assert_mentions(self.ownership_stage(5, explain, fr_rows(3)), self.MARKED)
+
+    def test_stage_6_refuses_the_marker_in_the_full_round(self):
+        self.assert_mentions(self.ownership_stage(6, EB_OK, self.marked_rounds()), self.MARKED)
+
+    def test_full_round_rows_with_the_marker_never_count_as_answered(self):
+        root = self.make_repo({"src/app.py": "x = 1\n"})
+        sha = git(root, "rev-parse", "HEAD")
+        problems = ownership_problems(ownership_doc(full=self.marked_rounds(), commit=sha), root, ls(root), "small", 1,
+                                      {})
+        self.assert_mentions(problems, "0 answered questions")
+
+    def test_full_round_rows_without_the_marker_count_as_answered(self):
+        root = self.make_repo({"src/app.py": "x = 1\n"})
+        sha = git(root, "rev-parse", "HEAD")
+        self.assertEqual(ownership_problems(ownership_doc(commit=sha), root, ls(root), "small", 1, {}), [])
 
 
 # ------------------------------------------------------------------- overrides
@@ -802,7 +927,7 @@ def doc(map=None, deps=None, tests=None, comps=None, override=None, manual=None)
         return f"## {heading}\n\n{top}{body}"
     out = ["# Architecture\n", "## Diagram\n\nA to B\n"]
     if comps is not None:
-        out.append("## Components\n\n" + md_table(COMP_COLS, [(c, "does work") for c in comps]))
+        out.append(section("Components", md_table(COMP_COLS, [(c, "does work") for c in comps])))
     if map is not None:
         out.append(section("File map", md_table(MAP_COLS, [(m, "a file") if isinstance(m, str) else m
                                                             for m in map])))
@@ -1365,6 +1490,13 @@ class TraitRules(GitCase):
             with self.subTest(name=name):
                 self.assertEqual(self.detect([name]), {"container"})
 
+    def test_documents_and_other_tools_named_like_containers_are_not_containers(self):
+        for name in ("Dockerfile.md", "docs/Dockerfile.txt", "composer.yml", "composer.yaml", "compose.yml.md",
+                     "docker-composer.yml"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), set())
+                self.assertEqual(size_problems(parse_stages(table()), [name], set()), [])
+
     def test_look_alike_names_are_not_containers(self):
         for name in ("README.md", "compose.txt", "composer.json", "docs/Dockerfile-notes.md", "compose.py"):
             with self.subTest(name=name):
@@ -1925,8 +2057,9 @@ class RecheckNote(unittest.TestCase):
         self.assertIn("re-check", note)
         self.assertIn("2026-01-08", note)
 
-    def test_the_due_day_itself_is_noted(self):
-        self.assertIn("re-check", recheck_note(self.lines("2026-01-08"), date(2026, 1, 8)))
+    def test_the_due_day_itself_is_silent(self):
+        """Design section 7: the re-check is asked the first time the owner works in the project after that date."""
+        self.assertIsNone(recheck_note(self.lines("2026-01-08"), date(2026, 1, 8)))
 
     def test_a_recheck_not_yet_due_is_silent(self):
         self.assertIsNone(recheck_note(self.lines("2026-01-08"), date(2026, 1, 7)))
@@ -2496,6 +2629,219 @@ class EvidenceCellRules(GitCase):
     def test_a_reviews_table_with_the_wrong_columns_is_refused(self):
         text = "# L\n\n## Reviews\n\n| A | B | C |\n|---|---|---|\n| 1 | x | y |\n"
         self.assertTrue(any("columns" in m for m in check_gates.ledger_problems(text)))
+
+
+class RungCellRules(GitCase):
+    """A rung cell must name test evidence: the gate's own records, ARCHITECTURE.md and empty files are not."""
+
+    def setUp(self):
+        self.root = self.make_repo({"README.md": "# p\n", "ARCHITECTURE.md": "# a\n", "STAGES.md": STAGES_OPEN,
+                                    "OVERRIDES.md": "# o\n", "docs/archive/STAGES-cycle-1.md": STAGES_OPEN,
+                                    "tests/test_a.py": "import unittest\n", "tests/test_empty.py": "",
+                                    "tests/test_blank.py": "  \n"})
+        self.tracked = set(ls(self.root))
+
+    def rung(self, cell):
+        return check_gates._rung_problem(cell, self.root, self.tracked)
+
+    def test_the_gate_records_and_the_architecture_file_are_refused(self):
+        for cell in ("STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "docs/archive/STAGES-cycle-1.md"):
+            with self.subTest(cell=cell):
+                self.assertIn("cannot be rung evidence", self.rung(cell) or "")
+
+    def test_an_empty_tracked_file_is_refused(self):
+        for cell in ("tests/test_empty.py", "tests/test_blank.py"):
+            with self.subTest(cell=cell):
+                self.assertIn("cannot be rung evidence", self.rung(cell) or "")
+
+    def test_a_tracked_test_file_still_counts(self):
+        self.assertIsNone(self.rung("tests/test_a.py"))
+        self.assertIsNone(self.rung("tests/test_a.py::test_one"))
+
+    def test_n_a_with_a_reason_still_counts(self):
+        self.assertIsNone(self.rung("n/a: reads a file only"))
+
+    def test_a_refused_file_beside_a_real_test_file_counts_for_the_test_file(self):
+        self.assertIsNone(self.rung("STAGES.md, tests/test_a.py"))
+
+    def test_the_review_row_naming_the_gate_files_is_refused(self):
+        doc_text = doc(tests=[trow("REQ-1", "ARCHITECTURE.md", "STAGES.md", "README.md", "README.md", "README.md")])
+        problems = tt_problems(doc_text, "full", {"REQ-1"}, {}, ls(self.root), self.root, {})
+        self.assertEqual(sorted(m.split(":")[1].strip() for m in messages(problems) if "cannot be rung" in m),
+                         ["rung 1 (Written first)", "rung 2 (Catches breakage)"], problems)
+
+
+class ComponentSectionRules(GitCase):
+    """A missing or empty Components section must not silently drop every component from the ladder."""
+
+    TESTS = [trow("REQ-1", E, E, "", "", "")]
+
+    def problems(self, architecture, stages, extra=None):
+        files = {"STAGES.md": stages, "ARCHITECTURE.md": architecture, "REQUIREMENTS.md": REQ_OK, E: "x = 1\n"}
+        files.update(extra or {})
+        root = self.make_repo(files)
+        return [p for p in check_project(root)[0] if p.file == "ARCHITECTURE.md"]
+
+    def at4(self):
+        return table(row(4, "passed", "file:ARCHITECTURE.md"))
+
+    def test_a_missing_components_section_fires_at_stage_4(self):
+        self.assert_mentions(self.problems(doc(tests=self.TESTS), self.at4()), "## Components")
+
+    def test_an_empty_components_table_fires_at_stage_4(self):
+        problems = self.problems(doc(comps=[], tests=self.TESTS), self.at4())
+        self.assertTrue(any("Components" in m and "no rows" in m for m in messages(problems)), problems)
+
+    def test_a_missing_components_section_fires_at_stage_5(self):
+        stages = table(row(5, "passed", "file:OWNERSHIP.md"))
+        self.assert_mentions(self.problems(doc(map=[], deps=[]), stages), "## Components")
+
+    def test_a_missing_components_section_is_not_judged_before_stage_4(self):
+        self.assertEqual(self.problems(doc(tests=self.TESTS), table()), [])
+
+    def test_a_filled_components_table_passes(self):
+        tests = self.TESTS + [trow("Parser", E, E, "", "", "")]
+        self.assertFalse(any("Components" in m for m in messages(self.problems(doc(comps=["Parser"], tests=tests),
+                                                                                self.at4()))))
+
+    def test_an_open_override_for_stage_4_silences_an_empty_table(self):
+        text = doc(tests=self.TESTS) + "\n## Components\n\nOverride: O1\n\n| Component | What it does |\n|---|---|\n"
+        extra = {"OVERRIDES.md": overrides_doc(entry(1, stage="4 Verify"))}
+        self.assertFalse(any("Components" in m for m in messages(self.problems(text, self.at4(), extra))))
+
+
+class ArchivedEvidenceRules(GitCase):
+    """docs/archive/ holds earlier cycles' records: never a design file, and an archived STAGES file is never evidence."""
+
+    def test_an_archived_file_is_not_the_full_design(self):
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/archive/design.md": "old design\n"})
+        r = Row(10, STAGE_NAMES[1], "passed", "file:DECISIONS.md,file:docs/archive/design.md", "-")
+        self.assert_mentions(evidence_content_problems(1, "full", root, ls(root), r, None), "design")
+
+    def test_a_design_file_beside_the_archive_still_counts(self):
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n"})
+        r = Row(10, STAGE_NAMES[1], "passed", "file:DECISIONS.md,file:docs/design.md", "-")
+        self.assertEqual(evidence_content_problems(1, "full", root, ls(root), r, None), [])
+
+    def test_an_archived_stages_file_is_never_evidence(self):
+        root = self.make_repo({"docs/archive/STAGES-cycle-1.md": STAGES_OPEN})
+        found = check_gates.evidence_item_problems("file", "docs/archive/STAGES-cycle-1.md", root, set(ls(root)))
+        self.assertTrue(any("own record" in m for m in found), found)
+
+    def test_another_archived_file_may_be_evidence(self):
+        root = self.make_repo({"docs/archive/notes.md": "notes\n"})
+        self.assertEqual(check_gates.evidence_item_problems("file", "docs/archive/notes.md", root, set(ls(root))), [])
+
+
+class BuildCommitRules(GitCase):
+    """Stage 3's commit must change something other than the gate's own records."""
+
+    def check(self, files=None, remove=()):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        later = commit(root, files, "later", remove=remove)
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{later},file:BUILD-LEDGER.md", "-")
+        return evidence_content_problems(3, "small", root, ls(root), r, setup)
+
+    def test_a_commit_that_changes_only_gate_records_fires(self):
+        for files in ({"STAGES.md": table(row(0, "passed", "file:REQUIREMENTS.md"))},
+                      {"OVERRIDES.md": "# Overrides\n"},
+                      {"docs/archive/STAGES-cycle-1.md": STAGES_OPEN},
+                      {"STAGES.md": table(cycle=1, extra=("Traits: none",)), "OVERRIDES.md": "# o\n"}):
+            with self.subTest(files=sorted(files)):
+                self.assert_mentions(self.check(files), "gate's own records")
+
+    def test_an_empty_commit_fires(self):
+        self.assert_mentions(self.check(), "gate's own records")
+
+    def test_a_commit_that_also_changes_code_passes(self):
+        self.assertEqual(self.check({"STAGES.md": table(extra=("Traits: none",)), "app.py": "x = 1\n"}), [])
+
+    def test_a_commit_that_removes_a_source_file_passes(self):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK, "old.py": "x = 1\n"})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        later = commit(root, remove=("old.py",), message="remove old code")
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{later},file:BUILD-LEDGER.md", "-")
+        self.assertEqual(evidence_content_problems(3, "small", root, ls(root), r, setup), [])
+
+
+class CaseSpellingRules(GitCase):
+    def test_a_case_only_mismatch_names_the_tracked_spelling(self):
+        root = self.make_repo({"Requirements.md": REQ_OK})
+        found = check_gates.evidence_item_problems("file", "requirements.md", root, set(ls(root)))
+        self.assertTrue(any("tracked as Requirements.md" in m for m in found), found)
+
+    def test_the_tracked_spelling_passes(self):
+        root = self.make_repo({"Requirements.md": REQ_OK})
+        self.assertEqual(check_gates.evidence_item_problems("file", "Requirements.md", root, set(ls(root))), [])
+
+    def test_a_file_that_is_not_tracked_in_any_spelling_keeps_its_message(self):
+        root = self.make_repo()
+        write(root, "notes.md", "x\n")
+        found = check_gates.evidence_item_problems("file", "notes.md", root, set(ls(root)))
+        self.assertTrue(any("not tracked by git" in m for m in found), found)
+
+
+class DeferredFindingRules(GitCase):
+    """Small findings deferred during the build and taken in the final fix wave."""
+
+    def test_a_duplicate_field_label_in_an_override_is_reported_at_its_second_line(self):
+        root = self.make_repo()
+        text = overrides_doc(entry(1)).replace("- **Status:** open\n", "- **Status:** open\n- **Status:** closed\n")
+        problems = override_problems(text, root, parse_stages(STAGES_OPEN))
+        second = text.split("\n").index("- **Status:** closed") + 1
+        self.assertIn(second, [p.line for p in problems if "twice" in p.message], problems)
+
+    def test_an_override_with_each_label_once_has_no_duplicate_problem(self):
+        root = self.make_repo()
+        problems = override_problems(overrides_doc(entry(1)), root, parse_stages(STAGES_OPEN))
+        self.assertFalse(any("twice" in m for m in messages(problems)), problems)
+
+    def test_a_bare_traits_line_is_a_problem_at_its_line(self):
+        text = table(extra=("Traits:",))
+        stages = parse_stages(text)
+        self.assertIn(line_of(text, "Traits:"), [n for n, m in stages.errors if "Traits" in m], stages.errors)
+        self.assertIsNone(stages.traits)
+
+    def test_traits_none_is_still_valid(self):
+        stages = parse_stages(table(extra=("Traits: none",)))
+        self.assertEqual((stages.traits, stages.errors), (set(), []))
+
+    def merge_repo(self, branch_files):
+        """main with a README; a side branch adds `branch_files`; a merge commit (no fast-forward) brings it in."""
+        root = self.make_repo({"README.md": "# p\n"})
+        main = git(root, "rev-parse", "--abbrev-ref", "HEAD")
+        git(root, "switch", "-q", "-c", "side")
+        commit(root, branch_files, "side work")
+        git(root, "switch", "-q", main)
+        commit(root, {"NOTES.md": "n\n"}, "main moves on")
+        git(root, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        return root, git(root, "rev-parse", "HEAD")
+
+    def test_a_merge_commit_that_brings_in_source_counts_as_the_hand_change(self):
+        root, merge = self.merge_repo({"src/app.py": "x = 1\n"})
+        self.assertEqual(check_gates._hand_change_problems(root, merge, 3, "OWNERSHIP.md"), [])
+
+    def test_a_merge_commit_that_brings_in_only_documents_is_not_a_hand_change(self):
+        root, merge = self.merge_repo({"docs/a.md": "x\n"})
+        self.assertTrue(check_gates._hand_change_problems(root, merge, 3, "OWNERSHIP.md"))
+
+    def test_a_merge_commit_that_brings_in_code_counts_for_stage_3(self):
+        root = self.make_repo({"README.md": "# p\n", "BUILD-LEDGER.md": LEDGER_OK})
+        setup = commit(root, {"STAGES.md": STAGES_OPEN}, "setup")
+        main = git(root, "rev-parse", "--abbrev-ref", "HEAD")
+        git(root, "switch", "-q", "-c", "side")
+        commit(root, {"app.py": "x = 1\n"}, "side work")
+        git(root, "switch", "-q", main)
+        commit(root, {"NOTES.md": "n\n"}, "main moves on")
+        git(root, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+        merge = git(root, "rev-parse", "HEAD")
+        r = Row(10, STAGE_NAMES[3], "passed", f"commit:{merge},file:BUILD-LEDGER.md", "-")
+        self.assertEqual(evidence_content_problems(3, "small", root, ls(root), r, setup), [])
+
+    def test_clean_lines_blanks_two_comments_in_one_text(self):
+        text = "a <!-- one --> b <!-- two --> c\n<!--\nthree\n-->\nkeep\n<!-- four\nfive -->\n"
+        self.assertEqual(check_gates.clean_lines(text), ["a  b  c", "", "", "", "keep", "", "", ""])
 
 
 class OverrideSurvivorRules(GitCase):

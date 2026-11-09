@@ -12,7 +12,7 @@ repository it ships in. Git is run through the `git` command.
 
 Layout (one file on purpose, so it can be copied alone; search for the section banner):
   text helpers      comment/fence blanking, table rows, UTF-8 decoding
-  git               tracked files, the start of a cycle, ancestry
+  git               tracked files, the start of a cycle, the first add of a file, changed files, ancestry
   STAGES.md         parse_stages and its table parser
   evidence          the REQUIRED table, evidence items, per-file content rules
   stage checks      stage_problems: evidence, ordering, overrides, adoption
@@ -46,6 +46,7 @@ SIZES = ("small", "full")
 METHODS = ("normal", "sub-agent")
 STAGES_FILE = "STAGES.md"
 OVERRIDES_FILE = "OVERRIDES.md"
+ARCHIVE_FOLDER = "docs/archive/"           # where init_project.py --new-cycle keeps the STAGES.md of earlier cycles
 EXAMPLE_MARKER = "(EXAMPLE)"
 MAX_ADOPTED_AT = 5
 # File types that count as source code: for the adoption check here and for the size and hand-change checks later.
@@ -227,6 +228,25 @@ def cycle_start(root, name: str, cycle) -> str | None:
     return found
 
 
+def first_added(root, name: str) -> str | None:
+    """The oldest commit that ever added `name`, or None. Adoption is anchored here and not at the start of a
+    cycle, because a Cycle number written by hand would otherwise make a fresh start for the adoption checks."""
+    out = git_text(root, "log", "--full-history", "--diff-filter=A", "--reverse", "--format=%H", "--", name)
+    found = (out or "").split()
+    return found[0] if found else None
+
+
+def changed_files(root, commit: str) -> list[str]:
+    """The paths a commit changed. A merge is compared with its first parent, so a merge that brings work in shows
+    that work; a root commit is compared with the empty tree. Names are read NUL-separated, never quoted or split."""
+    parents = (git_text(root, "rev-list", "--parents", "-n", "1", commit) or "").split()[1:]
+    span = [parents[0], commit] if parents else ["--root", commit]
+    result = git(root, "diff-tree", "-z", "--no-commit-id", "--name-only", "-r", *span)
+    if result.returncode != 0:
+        return []
+    return [name.decode("utf-8", "replace") for name in result.stdout.split(b"\0") if name]
+
+
 def resolve_commit(root, ref: str) -> str | None:
     out = git_text(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
     return out.strip() if out else None
@@ -285,6 +305,10 @@ def parse_stages(text: str) -> Stages:
                 stages.errors.append((number, f"Adopted-at must be a stage number (found '{value}')"))
         else:
             names = {t.strip().lower() for t in value.split(",")} - {""}
+            if not names:                     # a bare line would read as "none" and settle the traits unasked
+                stages.errors.append((number, "'Traits:' has no value; list the traits (for example "
+                                              "'Traits: web, personal-data') or write 'Traits: none'"))
+                continue
             stages.traits = set() if names == {"none"} else names
     if "Cycle" not in seen:
         stages.errors.append((0, "missing line 'Cycle: N' (the first cycle is 'Cycle: 1'; a new cycle adds one)"))
@@ -335,7 +359,8 @@ def _parse_stage_table(stages: Stages, table: list[tuple[int, str]]) -> None:
 
 _REQUIREMENTS = (Need("file", "REQUIREMENTS.md", "REQUIREMENTS.md"), Need("file", "ATTACKS.md", "ATTACKS.md"))
 _DECISIONS = Need("file", "DECISIONS.md", "DECISIONS.md")
-_DESIGN = Need("under", "docs/", "a design file under docs/ (not docs/plans/)", ("docs/plans/",))
+_DESIGN = Need("under", "docs/", "a design file under docs/ (not docs/plans/ or docs/archive/)",
+               ("docs/plans/", ARCHIVE_FOLDER))
 _BUILD = (Need("commit", "", "a commit made after STAGES.md was first committed"),
           Need("file", "BUILD-LEDGER.md", "BUILD-LEDGER.md"))
 _ARCHITECTURE = Need("file", "ARCHITECTURE.md", "ARCHITECTURE.md")
@@ -391,8 +416,24 @@ def read_evidence_file(root: Path, rel: str) -> str | None:
     return None if problem else normalise(text)               # not UTF-8: reported by stage_problems, never judged
 
 
-def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str]) -> list[str]:
-    """Why one evidence item is not acceptable (empty list when it is)."""
+def is_gate_record(rel: str) -> bool:
+    """STAGES.md, OVERRIDES.md or an archived STAGES file under docs/archive/: the gate's own records."""
+    folded = rel.casefold()
+    return folded in (STAGES_FILE.casefold(), OVERRIDES_FILE.casefold()) or (
+        folded.startswith(ARCHIVE_FOLDER) and posixpath.basename(folded).startswith("stages"))
+
+
+def _marker_text(rel: str, text: str, stage) -> str:
+    """The part of an evidence file where the template marker counts: outside comments and code fences, because
+    every template explains the marker in its own comment. For OWNERSHIP.md at stage 5 only the Explain-back
+    section counts, because the Full round belongs to stage 6."""
+    if stage == 5 and rel == OWNERSHIP_FILE:
+        return "\n".join(section_lines(text, "Explain-back") or [])
+    return "\n".join(clean_lines(text))
+
+
+def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str], stage: int | None = None) -> list[str]:
+    """Why one evidence item is not acceptable (empty list when it is). `stage` narrows the marker search."""
     if kind == "commit":
         if not re.fullmatch("[0-9a-f]{7,40}", value):
             return [f"commit:{value} is not a hexadecimal hash (7 to 40 characters from 0-9 and a-f)"]
@@ -401,7 +442,7 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str])
             return [f"commit:{value} is not in the history of the current branch"]
         return []
     rel = norm_path(value)
-    if rel.casefold() in (STAGES_FILE.casefold(), OVERRIDES_FILE.casefold()):
+    if is_gate_record(rel):
         return [f"file:{value}: {rel} is the gate's own record and cannot be evidence"]
     path = root / rel
     try:
@@ -413,6 +454,9 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str])
     if path.is_dir():
         return [f"file:{value} is a folder; name a file"]
     if rel not in tracked:
+        spelled = next((t for t in sorted(tracked) if t.casefold() == rel.casefold()), None)
+        if spelled is not None:
+            return [f"file:{value} is tracked as {spelled}; write the path with that exact spelling"]
         if not path.is_file():
             return [f"file:{value} does not exist"]
         return [f"file:{value} is not tracked by git; add and commit it"]
@@ -421,7 +465,7 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str])
     text = path.read_bytes().decode("utf-8", "replace")
     if not text.strip():
         return [f"file:{value} is empty"]
-    if EXAMPLE_MARKER in text:
+    if EXAMPLE_MARKER in _marker_text(rel, text, stage):
         return [f"file:{value} still contains the template marker {EXAMPLE_MARKER}; replace the worked example"]
     return []
 
@@ -484,8 +528,11 @@ CONTENT_RULES = {
 
 
 def evidence_content_problems(stage: int, size, root, tracked, row: Row, stages_first_commit: str | None,
-                              file: str = STAGES_FILE) -> list[Problem]:
-    """What a stage's evidence must contain, and whether the named files say it."""
+                              file: str = STAGES_FILE, refused: frozenset[str] = frozenset()) -> list[Problem]:
+    """What a stage's evidence must contain, and whether the named files say it.
+
+    `refused` holds files already reported as unusable evidence (empty, or still the template's example); their
+    content is not judged again, so each such file is reported once."""
     root = Path(root)
     name = STAGE_NAMES[stage]
     items, _ = parse_evidence(row.evidence)
@@ -503,7 +550,7 @@ def evidence_content_problems(stage: int, size, root, tracked, row: Row, stages_
     tracked_set = set(tracked)
     for rel in files:
         rule = CONTENT_RULES.get((stage, rel))
-        text = read_evidence_file(root, rel) if rule and rel in tracked_set else None
+        text = read_evidence_file(root, rel) if rule and rel in tracked_set and rel not in refused else None
         if text is not None:
             problems += [Problem(rel, 0, f"{name}: {message}") for message in rule(text)]
     return problems
@@ -516,10 +563,21 @@ def _commit_after_problems(name, root, commits, first, row, file) -> list[Proble
     if first is None:
         return [Problem(file, row.line, f"{name}: {STAGES_FILE} is not committed yet, so no commit can come after "
                                         "it; commit it first, then build")]
-    if not any(commit_is_after(root, first, c) for c in commits):
+    after = [c for c in commits if commit_is_after(root, first, c)]
+    if not after:
         return [Problem(file, row.line, f"{name}: no listed commit was made after {STAGES_FILE} was first "
                                         "committed; the setup commit does not count")]
+    if not any(_changes_work(root, c) for c in after):
+        return [Problem(file, row.line, f"{name}: every listed commit after {STAGES_FILE} was first committed "
+                                        f"changes only the gate's own records ({STAGES_FILE}, {OVERRIDES_FILE}, "
+                                        f"{ARCHIVE_FOLDER}) or nothing; name a commit that holds the build work")]
     return []
+
+
+def _changes_work(root, commit: str) -> bool:
+    """True when the commit changes a file that is not one of the gate's own records."""
+    return any(not is_gate_record(rel) and not rel.casefold().startswith(ARCHIVE_FOLDER)
+               for rel in changed_files(root, commit))
 
 
 # ---------------------------------------------------------------- stage checks
@@ -549,7 +607,7 @@ def stage_problems(text: str, root, tracked, overrides: dict, file: str = STAGES
             problems += _override_cell_problems(row, overrides, file)
         elif row.status == "reopened" and n != 6:
             problems.append(Problem(file, row.line, f"{row.name}: 'reopened' is only allowed for stage 6 Own"))
-    problems += _adoption_problems(stages, root, first_commit, file)
+    problems += _adoption_problems(stages, root, file)
     return problems
 
 
@@ -559,16 +617,19 @@ def _passed_problems(n, stages, row, root, tracked_set, tracked, first_commit, f
         return [Problem(file, row.line, f"{row.name} is passed but names no evidence "
                                         "(write file:<path> or commit:<hash>)")]
     problems = [Problem(file, row.line, f"{row.name}: {message}") for message in shape_errors]
+    refused = set()
     for kind, value in items:
-        found = evidence_item_problems(kind, value, root, tracked_set)
+        found = evidence_item_problems(kind, value, root, tracked_set, n)
         problems += [Problem(file, row.line, f"{row.name}: {message}") for message in found]
-        if kind == "file" and not found:                     # a usable file: its bytes must be UTF-8
+        if kind == "file" and found:
+            refused.add(norm_path(value))
+        elif kind == "file":                                 # a usable file: its bytes must be UTF-8
             rel = norm_path(value)
             problem = decode((root / rel).read_bytes(), rel)[1]
             if problem:
                 problems.append(problem)
     first = first_commit() if n == 3 else None
-    problems += evidence_content_problems(n, stages.size, root, tracked, row, first, file)
+    problems += evidence_content_problems(n, stages.size, root, tracked, row, first, file, frozenset(refused))
     return problems
 
 
@@ -590,13 +651,18 @@ def _override_cell_problems(row: Row, overrides: dict, file: str) -> list[Proble
     return []
 
 
-def _adoption_problems(stages: Stages, root: Path, first_commit, file: str) -> list[Problem]:
+def _adoption_problems(stages: Stages, root: Path, file: str) -> list[Problem]:
+    """Adoption is measured from the oldest commit that ever added the file, and only cycle 1 may adopt."""
     adopted = [r for r in stages.rows.values() if r.status == "adopted"]
     n = stages.adopted_at
     problems = []
     if n is not None and n > MAX_ADOPTED_AT:
         problems.append(Problem(file, stages.adopted_at_line, f"Adopted-at: {n} is too high; it may be at most "
                                 f"{MAX_ADOPTED_AT}, so that 5 Ship and 6 Own are always done"))
+    if n is not None and stages.cycle is not None and stages.cycle != 1:
+        problems.append(Problem(file, stages.adopted_at_line, f"Adopted-at is allowed only in cycle 1, and this "
+                                f"file says Cycle: {stages.cycle}; a later cycle starts from work done under the "
+                                "process, so none of its stages can be adopted"))
     for r in adopted:
         if n is None:
             problems.append(Problem(file, r.line, f"{r.name} is adopted but there is no 'Adopted-at: N' line"))
@@ -605,7 +671,7 @@ def _adoption_problems(stages: Stages, root: Path, first_commit, file: str) -> l
                                                   "may be adopted"))
     if not adopted or n is None:
         return problems
-    first = first_commit()
+    first = first_added(root, file)
     if first is None:
         return problems + [Problem(file, stages.adopted_at_line, f"{file} is not committed yet; commit it so "
                                    "the Adopted-at line can be checked against its first commit")]
@@ -629,26 +695,31 @@ TEXT_FIELDS = ("What was skipped", "Why", "Risk accepted", "How to close")
 
 
 def _override_entries(lines: list[str]):
-    """(number, heading line, {label: (value, line)}) for each '### O<n>. title'; a body runs to the next heading."""
+    """(number, heading line, {label: (value, line)}, [(label, line) of each repeated label]) for each
+    '### O<n>. title'; a body runs to the next heading. A repeated label keeps its last value and is reported."""
     out = []
     for i, line in enumerate(lines):
         m = re.match(r"### O(\d+)\. ", line)
         if not m:
             continue
         fields: dict[str, tuple[str, int]] = {}
+        repeated: list[tuple[str, int]] = []
         for j in range(i + 1, len(lines)):
             if re.match(r"#{1,3} ", lines[j]):
                 break
             f = FIELD.match(lines[j])
             if f:
-                fields[f.group(1).strip()] = (f.group(2).strip(), j + 1)
-        out.append((int(m.group(1)), i + 1, fields))
+                label = f.group(1).strip()
+                if label in fields:
+                    repeated.append((label, j + 1))
+                fields[label] = (f.group(2).strip(), j + 1)
+        out.append((int(m.group(1)), i + 1, fields, repeated))
     return out
 
 
 def parse_overrides(text: str) -> dict[str, Override]:
     result = {}
-    for n, _, fields in _override_entries(clean_lines(text)):
+    for n, _, fields, _ in _override_entries(clean_lines(text)):
         get = lambda label: fields.get(label, ("", 0))[0]          # noqa: E731
         result[f"O{n}"] = Override(get("Status").lower(), get("Stage"), get("Re-confirmed for release"))
     return result
@@ -661,7 +732,7 @@ def _history_ids(root, file: str) -> set[int]:
     for commit in log.split():
         old = git_text(root, "show", f"{commit}:{file}")
         if old:
-            ids |= {n for n, _, _ in _override_entries(clean_lines(old))}
+            ids |= {entry[0] for entry in _override_entries(clean_lines(old))}
     return ids
 
 
@@ -679,20 +750,22 @@ def override_problems(text, root, stages, file: str = OVERRIDES_FILE) -> list[Pr
     for i, line in enumerate(lines):
         if re.match(r"#{1,6}\s*O\d+", line) and not re.match(r"### O\d+\. \S", line):
             problems.append(Problem(file, i + 1, f"heading '{line.strip()}' is not in the form '### O<number>. <title>'"))
-    for position, (n, heading_line, _) in enumerate(entries):
+    for position, (n, heading_line, _, _) in enumerate(entries):
         if n != position + 1:
-            listed = ", ".join(f"O{x}" for x, _, _ in entries)
+            listed = ", ".join(f"O{entry[0]}" for entry in entries)
             problems.append(Problem(file, heading_line, f"numbering is {listed}; expected O1..O{len(entries)} in order"))
             break
-    for n, heading_line, fields in entries:
+    for n, heading_line, fields, repeated in entries:
         problems += _entry_problems(n, heading_line, fields, file)
-    present = {n for n, _, _ in entries}
+        problems += [Problem(file, line, f"O{n}: '{label}' appears twice; keep one line (only the last is read)")
+                     for label, line in repeated]
+    present = {entry[0] for entry in entries}
     problems += [Problem(file, 0, f"O{n} vanished: it was in an earlier commit but is not in the file now; "
                                   "entries are never deleted (mark it closed instead)")
                  for n in sorted(history - present)]
     ship = stages.rows.get(5) if stages is not None else None
     if ship is not None and ship.status in ("passed", "overridden"):
-        for n, heading_line, fields in entries:
+        for n, heading_line, fields, _ in entries:
             status = fields.get("Status", ("", 0))[0].lower()
             confirmed = fields.get("Re-confirmed for release", ("", 0))[0]
             if status == "open" and not ISO_DATE.fullmatch(confirmed):
@@ -923,6 +996,14 @@ def dependency_problems(text, deps, unreadable, overrides, file: str = ARCHITECT
     return problems
 
 
+def _not_rung_evidence(rel: str, root) -> bool:
+    """A tracked file that proves no test: a gate record, ARCHITECTURE.md (which holds the table), or an empty file."""
+    if is_gate_record(rel) or rel.casefold() == ARCHITECTURE_FILE.casefold():
+        return True
+    path = Path(root) / rel
+    return path.is_file() and not path.read_bytes().strip()
+
+
 def _rung_problem(cell: str, root, tracked: set[str]):
     """Why a test-table cell is not acceptable evidence (None when it is)."""
     text = cell.strip()
@@ -933,16 +1014,23 @@ def _rung_problem(cell: str, root, tracked: set[str]):
         if reason and reason.group(1).strip() and not PLACEHOLDER.fullmatch(reason.group(1).strip()):
             return None
         return "'n/a' needs a reason: write 'n/a: <reason>'"
+    refused = []
     for token in re.split(r"[\s,;()`'\"]+", text):
         token = token.split("::")[0].rstrip(".")
         if not token:
             continue
-        if norm_path(token) in tracked:
-            return None
+        rel = norm_path(token)
+        if rel in tracked:
+            if not _not_rung_evidence(rel, root):
+                return None
+            refused.append(rel)
         if re.fullmatch("[0-9a-f]{7,40}", token):
             resolved = resolve_commit(root, token)
             if resolved and is_ancestor(root, resolved, "HEAD"):
                 return None
+    if refused:
+        return (f"{', '.join(refused)} cannot be rung evidence: the gate's own records, {ARCHITECTURE_FILE} and "
+                "empty files prove no test; name a test or results file or a commit, or write 'n/a: <reason>'")
     return f"'{text}' holds no tracked file or commit on the current history; write one, or 'n/a: <reason>'"
 
 
@@ -982,6 +1070,24 @@ def test_table_problems(text, size, parts, attack_rungs, tracked, root, override
                 problems.append(Problem(file, number, f"{part}: rung {rung} ({TEST_COLUMNS[rung][2:]}): {why}"))
     for part in sorted(set(parts) - set(seen)):
         problems.append(Problem(file, head, f"{part} has no row in the test table"))
+    return problems
+
+
+def components_problems(text, overrides, stage: str, file: str = ARCHITECTURE_FILE) -> list[Problem]:
+    """The Components table must exist and hold rows once stage 4 or 5 is passed: each component needs a test row
+    and a full-round question, so a missing table would drop them all without a word."""
+    section = _section(text, "Components")
+    if section is None:
+        return [Problem(file, 0, "no '## Components' section; list each part of the system that does work")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, stage, file, "Components")
+    if silenced:
+        return []
+    rows, errors = _table(head, body, COMPONENT_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    if not rows and not errors:
+        problems.append(Problem(file, head, "the Components table has no rows; list each part of the system that "
+                                            "does work"))
     return problems
 
 
@@ -1118,7 +1224,8 @@ def manifest_dependencies(root, tracked) -> tuple[dict[str, str | None], list[st
 
 
 def architecture_problems(root, tracked, stages, overrides) -> list[Problem]:
-    """The checks that bind at a stage: attack list at 0, test table at 4, file map and dependencies at 5."""
+    """The checks that bind at a stage: attack list at 0, components and test table at 4, components, file map and
+    dependencies at 5."""
     if stages is None or stages.size not in SIZES:
         return []
 
@@ -1141,6 +1248,7 @@ def architecture_problems(root, tracked, stages, overrides) -> list[Problem]:
             problems.append(Problem(ARCHITECTURE_FILE, 0, "file is missing; copy templates/ARCHITECTURE.md into the "
                                                           "project and fill it in"))
         return problems
+    problems += components_problems(text, overrides, "4" if passed(4) else "5")
     if passed(4):
         requirements, _ = _load(root, REQUIREMENTS_FILE)
         parts = components(text) | requirement_ids(requirements or "") | attack_ids(attacks or "")
@@ -1162,7 +1270,10 @@ class TraitRule(NamedTuple):
     deps: tuple[str, ...] = ()
 
 
-CONTAINER_FILES = ("dockerfile", "dockerfile.*", "*.dockerfile", "compose*.y*ml", "docker-compose*.y*ml")
+CONTAINER_FILES = ("dockerfile", "dockerfile.*", "*.dockerfile",
+                   "compose.yml", "compose.yaml", "compose[.-]*.yml", "compose[.-]*.yaml",
+                   "docker-compose.yml", "docker-compose.yaml", "docker-compose[.-]*.yml", "docker-compose[.-]*.yaml")
+DOCUMENT_SUFFIXES = (".md", ".txt", ".rst")     # a document about a Dockerfile is not one
 LLM_DEPS = ("anthropic", "openai", "langchain", "litellm", "@anthropic-ai/sdk")
 # Design section 9: the trait rules as data. `paid-api` also follows from every llm dependency.
 TRAIT_RULES: dict[str, TraitRule] = {
@@ -1185,6 +1296,7 @@ GO_LIVE_STATUSES = ("proven", "not applicable", "overridden")
 def _tracked_matching(tracked, patterns) -> list[str]:
     return [rel for rel in tracked
             if "node_modules" not in rel.split("/")[:-1]
+            and not rel.lower().endswith(DOCUMENT_SUFFIXES)
             and any(fnmatch.fnmatchcase(rel.split("/")[-1].lower(), p) for p in patterns)]
 
 
@@ -1355,18 +1467,20 @@ def _ownership_lines(text: str) -> dict[str, tuple[str, int]]:
 
 
 def _answer_rows_problems(rows, question_at, answer_at, gap_at, status_at, label_of, file):
-    """(answered count, problems) for the rows of an explain-back or full-round table."""
+    """(answered count, problems) for the rows of an explain-back or full-round table. A row that still carries the
+    template marker is the template's example, never an answer, so it is not counted."""
     answered, problems = 0, []
     for number, cells in rows:
         label = label_of(cells)
-        if any(EXAMPLE_MARKER in cell for cell in cells):
+        marked = any(EXAMPLE_MARKER in cell for cell in cells)
+        if marked:
             problems.append(Problem(file, number, f"{label}: still contains the template marker {EXAMPLE_MARKER}; "
                                                   "replace the worked example"))
         if not cells[question_at].strip():
             problems.append(Problem(file, number, f"{label}: Question is blank"))
         if _blank(cells[answer_at]):
             problems.append(Problem(file, number, f"{label}: the answer is blank; the owner's words go here"))
-        else:
+        elif not marked:
             answered += 1
         if not cells[gap_at].strip():
             problems.append(Problem(file, number, f"{label}: Gap is blank; the grading session writes the gap, "
@@ -1447,8 +1561,7 @@ def _hand_change_problems(root: Path, value: str, number: int, file: str) -> lis
     resolved = resolve_commit(root, value)
     if not (resolved and is_ancestor(root, resolved, "HEAD")):
         return [Problem(file, number, f"Hand-changed commit {value} is not in the history of the current branch")]
-    changed = (git_text(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", resolved) or "")
-    if not any(name.lower().endswith(SOURCE_EXTENSIONS) for name in changed.split("\n")):
+    if not any(name.lower().endswith(SOURCE_EXTENSIONS) for name in changed_files(root, resolved)):
         return [Problem(file, number, f"Hand-changed commit {value} touches no source file; it must be the "
                                       "commit where the owner changed code by hand")]
     return []
@@ -1472,12 +1585,13 @@ def _recheck_date_problems(lines, file) -> list[Problem]:
 
 
 def recheck_note(text, today: date) -> str | None:
-    """A reminder (never a failure) when the re-check date has come and the re-check is not recorded as done."""
+    """A reminder (never a failure) once the re-check date has passed and the re-check is not recorded as done.
+    The due day itself is quiet: design section 7 asks again the first time the owner works after that date."""
     lines = _ownership_lines(text)
     due, done = lines.get("Re-check due"), lines.get("Re-check done")
     if due is None or not _is_date(due[0]) or (done is not None and _is_date(done[0])):
         return None
-    if today < date.fromisoformat(due[0]):
+    if today <= date.fromisoformat(due[0]):
         return None
     return (f"re-check was due {due[0]} and is not recorded as done: ask the owner the {OWNERSHIP_FILE} questions "
             "again before other work, then fill in 'Re-check done'")

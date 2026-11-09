@@ -9,7 +9,8 @@ Cycle: N. The first cycle of work is 1. Starting another cycle (init_project.py 
 file and adds one; the gate measures commit evidence from the oldest commit whose STAGES.md holds the current
 number, so never reuse or lower a number.
 Adopted-at: N (optional). For a project that already existed: stages below N may be marked "adopted", which means
-"not done under this process", never "passed". N must be in this file's first commit, and at most 5.
+"not done under this process", never "passed". Allowed in cycle 1 only. N must be in the first commit that ever
+added this file, and at most 5.
 Traits: a, b (optional). Traits no script can detect, such as personal-data. "Traits: none" is allowed.
 
 Status of a stage is one of:

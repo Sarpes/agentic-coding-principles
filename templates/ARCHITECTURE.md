@@ -1,13 +1,13 @@
 # Architecture
 
 <!--
-How the project is built, written stage by stage and finished before release. check_gates.py reads three of
+How the project is built, written stage by stage and finished before release. check_gates.py reads four of
 its sections; keep the headings and the table columns exactly. The rows below are worked examples, marked
 (EXAMPLE): replace them and remove the marker. check_gates.py refuses this file as evidence while the marker
 remains.
 
-When each check binds (once the stage is marked passed): the Tests section at stage 4 Verify; the File map and
-Dependencies sections at stage 5 Ship.
+When each check binds (once the stage is marked passed): the Components and Tests sections at stage 4 Verify;
+the File map and Dependencies sections at stage 5 Ship. The Components table must hold at least one row.
 
 Any checked section may carry a line "Override: O<n>" naming an open entry in OVERRIDES.md for that stage; the
 check is then reported as overridden and not as failed.
@@ -62,7 +62,8 @@ cell holds exactly one part, written as it appears there. The five rungs are the
   4 Real integration     a clean-clone start and a run with the real services
   5 Deliberate failure   kill, cut or corrupt something; the system recovers or fails visibly
 Each rung cell holds a tracked test or results file (tests/test_a.py, or tests/test_a.py::test_name), or a
-commit hash on the current history, or "n/a: <reason>". Small projects need rungs 1 and 2; Full projects need all
+commit hash on the current history, or "n/a: <reason>". STAGES.md, OVERRIDES.md, archived STAGES files, this
+file and empty files are refused: they prove no test. Small projects need rungs 1 and 2; Full projects need all
 five; any attack also needs the rung its ATTACKS.md row names (3 or 5), on any size.
 -->
 

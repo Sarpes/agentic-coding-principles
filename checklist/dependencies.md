@@ -31,7 +31,7 @@ A *dependency* is code written by someone else that your project uses, such as a
 
 ### C-DEP-4 Replace dependencies that are no longer maintained
 
-- **Rule:** Check that each dependency is still maintained and has not reached its end of life; for any that is abandoned, write down a plan (replace it, or own the risk).
+- **Rule:** Check that each dependency is still maintained and has not reached its end of life (the date after which its makers stop releasing fixes for it); for any that is abandoned, write down a plan (replace it, or own the risk).
 - **Why it matters:** An abandoned library never gets security fixes, so its next vulnerability stays open for good.
 - **Applies when:** always
 - **How to validate:** For each direct dependency, record the date of its last release; list those that look abandoned (for example, no release in the past year) and the plan for each.
