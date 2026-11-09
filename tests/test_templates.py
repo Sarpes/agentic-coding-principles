@@ -11,11 +11,12 @@ from checks.check_docs import ai_log_problems, decisions_problems, requirements_
 
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 ALL = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "BUILD-LEDGER.md",
-       "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md")
+       "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md",
+       "STAGES.md", "OVERRIDES.md")
 
 
 SECTIONS = {
-    "BUILD-LEDGER.md": ("Method", "Rulings", "Deferred findings"),
+    "BUILD-LEDGER.md": ("Method", "Rulings", "Deferred findings", "Reviews"),
     "RESULTS.md": ("Setup", "Outcome versus expected", "Observations", "How to reproduce"),
     "HANDOVER.md": ("Status", "Resume order", "Open items"),
     "PULL_REQUEST_TEMPLATE.md": ("Goal", "Choices", "Measurements", "How to check"),

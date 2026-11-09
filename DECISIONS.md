@@ -162,6 +162,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Two lists to maintain, and each checklist source has to be read and cited when the item is written.
 - **What would make you change it:** A checklist item later backed by a real incident moves to the principles.
 
+### D17. Evidence is typed and checked per stage
+
+- **Context:** A gate that accepts any text as evidence passes a stage whenever someone writes a plausible word. Review of the design found that setup files and empty files were enough to pass most gates.
+- **Options considered:** (a) free-text evidence with a non-empty check; (b) one shared rule for every stage ("a tracked file exists"); (c) typed evidence, `file:<path>` or `commit:<hash>`, with a table of what each stage and size must name, and a content rule for the files that matter.
+- **Chosen:** (c). The table is the data structure `REQUIRED` in `check_gates.py`, and each content rule runs only at the stage that needs its file.
+- **Why:** A file is checked as tracked, inside the project, non-empty, not a folder and free of the template marker; a commit is checked as a real hash on the current history and, for Build, as made after `STAGES.md` first appeared. Each rule was seen failing on a real temporary git repository before it was written.
+- **Rejected:** (a), because "done" would be a word and not a fact; (b), because Build needs a commit and Retro needs a filled section, which one rule cannot express.
+- **Cost / trade-off:** The evidence format is strict, so a typo costs a re-run. A commit proves a commit exists, not that the owner reviewed it, because the owner and the agent share one git identity (design section 3). "One review row per task" on Full size is enforced only as at least one filled review row, because the gate cannot know the task count.
+- **What would make you change it:** A stage whose real evidence is neither a file nor a commit, such as a running service, would need a third evidence type.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
