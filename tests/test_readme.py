@@ -242,11 +242,16 @@ class UsageTests(unittest.TestCase):
 
 
 class ChangelogTests(unittest.TestCase):
-    def test_unreleased_lists_the_skill_and_no_release_is_claimed(self):
+    def test_release_0_2_0_lists_the_skill_and_unreleased_is_empty(self):
         text = read(ROOT / "CHANGELOG.md")
+        match = re.search(r"^## \[0\.2\.0\] - \d{4}-\d{2}-\d{2}$", text, re.M)
+        if match is None:
+            self.fail("no dated 0.2.0 section")
+        released = text[match.end():].split("\n## ", 1)[0]
+        self.assertIn("skills/agentic-principles", released)
         unreleased = text.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
-        self.assertIn("skills/agentic-principles", unreleased)
-        self.assertNotIn("## [0.2.0]", text)
+        self.assertEqual(unreleased.strip(), "")
+        self.assertLess(text.index("## Unreleased"), match.start())
 
 
 if __name__ == "__main__":
