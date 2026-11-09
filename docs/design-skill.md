@@ -63,7 +63,7 @@ At the start the owner picks, and the skill records in `STAGES.md`:
 | 3 Build | Failing test first; independent review; suite run after every merge; rulings and deferred findings copied into the tracked `BUILD-LEDGER.md` | commits after setup, reviews recorded in `BUILD-LEDGER.md` | one review row | one row per task |
 | 4 Verify | The test ladder; real end-to-end run done early, not only at the end | ladder table in `ARCHITECTURE.md`, `RESULTS.md` | rungs 1-2 | all rungs |
 | 5 Ship | A short **explain-back** that blocks release (section 7); go-live review; documents checked against the code; secrets and dependencies audited; each open override re-confirmed; pull request with goal, choices, measurements, how to check | `OWNERSHIP.md` explain-back, `GO-LIVE.md` | 3 questions; `GO-LIVE.md` only if traits exist | 3 questions; all required rows |
-| 6 Own | Owner explains the project closed-book and changes a module by hand; a separate session grades | answers in `OWNERSHIP.md` | 3 questions | one question per component, at least 3 |
+| 6 Own | Owner explains the project closed-book and changes a module by hand; a separate session grades | answers in the private record named by `OWNERSHIP.md` (amended by D26) | 3 questions | one question per component, at least 3 |
 | 7 Retro | Every "where the AI was wrong" entry becomes a rule, a template change or a recorded "won't fix" | retro section of the AI log | short | full |
 
 Approvals state their scope: approving one call, merge or batch approves that and nothing further. Paid calls, merges, pushes and product decisions stay with the owner. The agent may make implementation rulings only with a stated cost if wrong, and deferred findings are sorted MUST, SHOULD or LEAVE, never dropped.
@@ -238,7 +238,7 @@ templates/                STAGES, OVERRIDES, ATTACKS, ARCHITECTURE, GO-LIVE, OWN
 - a file map or dependency table disagrees with the repository, or a row in either is blank; a folder entry covers at most 10 files unless marked `(bulk: <reason>)`, and `/` alone is refused;
 - a `GO-LIVE.md` row is unresolved, a `proven` row has no evidence, or a required checklist or attack id has no row;
 - the test table is empty, misses a part, has a row naming more than one id, a missing rung, a cell with no tracked file or commit, or a rung marked not applicable with no reason;
-- `OWNERSHIP.md` has too few or blank answers, an open gap, no `Graded by`, a hand-changed commit touching no source file, or a re-check date that is not exactly 7 days after closing.
+- `OWNERSHIP.md` has too few or blank answers, an open gap, no `Graded by`, a hand-changed commit touching no source file, or a re-check date that is not exactly 7 days after closing. Amended by D26: the answers, gaps and `Graded by` are read from the private record named by the `Record:` line; a record that cannot be read fails (fail-closed), and answers in the project's `OWNERSHIP.md` are refused.
 
 Required evidence per stage, with the content each must hold: 0 `REQUIREMENTS.md` (at least one `REQ-n`) and `ATTACKS.md`; 1 `DECISIONS.md` (at least one entry), and on Full a design file under `docs/`; 2 a non-empty file in `docs/plans/`, or `PLAN.md` on Small; 3 a commit made after `STAGES.md` first appeared, and `BUILD-LEDGER.md` with its review rows; 4 `ARCHITECTURE.md`, and on Full `RESULTS.md`; 5 `OWNERSHIP.md`, and `GO-LIVE.md` when required; 6 `OWNERSHIP.md`; 7 `AI-Agents.md` with a filled `## Retro` section.
 

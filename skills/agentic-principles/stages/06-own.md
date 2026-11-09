@@ -7,8 +7,8 @@ Prove that the owner can explain and change this project without the agent. This
 ## Do
 
 1. Draw the questions from `ARCHITECTURE.md`, one per component and at least 3 in all.
-2. Run the **closed-book** round: the owner has the documents shut and answers without help. Write each answer word for word in `OWNERSHIP.md`, section `## Full round`. Do not tidy, complete or suggest answers: a tidy answer hides what was not understood.
-3. Have a **separate session**, not the one that wrote the code or asked the questions, compare the answers with the code and name the gaps. Record that session in `Graded by`.
+2. Run the **closed-book** round: the owner has the documents shut and answers without help. Write each answer word for word in the private record (the file the `Record:` line of `OWNERSHIP.md` names, in the companion repo), section `## Full round`, and commit it there, never in the project repo. Do not tidy, complete or suggest answers: a tidy answer hides what was not understood.
+3. Have a **separate session**, not the one that wrote the code or asked the questions, compare the answers with the code and name the gaps in the private record. Record that session in its `Graded by` line.
 4. **A gap keeps this stage open** until the owner can explain that point in a later answer, or logs an override after hearing the risk. Teaching the point is welcome; writing the answer is not.
 5. The owner changes at least one module by hand and names the commit in `Hand-changed commit`. It must touch a source file. The agent may suggest a change and must not make it.
 6. Write `Closed` with the date, and `Re-check due` exactly 7 days later.
@@ -26,7 +26,7 @@ That companion prepares the agent; it does not teach the owner, who still does t
 
 ## Gate
 
-`OWNERSHIP.md` with enough answers, no open gap, `Graded by` filled, a hand-changed commit touching a source file, and a `Re-check due` exactly 7 days after `Closed`. Named as `file:` evidence in `STAGES.md`, then `python checks/check_gates.py`.
+The private record with enough answers, no open gap and `Graded by` filled; the project's `OWNERSHIP.md` with a hand-changed commit touching a source file and a `Re-check due` exactly 7 days after `Closed`, and no answers of its own. Named as `file:` evidence in `STAGES.md`, then `python checks/check_gates.py`.
 
 ## Small
 

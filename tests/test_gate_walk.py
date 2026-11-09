@@ -87,6 +87,8 @@ class Walk:
         case.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name) / "proj"
         self.root.mkdir()
+        self.record = Path(tmp.name) / "proj-internal" / "ownership" / "OWNERSHIP.md"
+        self.record.parent.parent.mkdir()          # the private companion exists before init, as repo-kickoff makes it
         git(self.root, "init", "-q")
         commit(self.root, {"tool.py": "def add(a, b):\n    return a + b\n",
                            "tests/test_tool.py": "import unittest\n"}, "first code")
@@ -155,11 +157,14 @@ class Walk:
         self.stage(4, evidence, {"ARCHITECTURE.md": self.architecture()}, "stage 4 Verify")
 
     def ship(self):
-        ownership = replace_examples(read(self.root, "OWNERSHIP.md"), {"Explain-back": [
+        """The explain-back answers are written into the private record; the project file only gets the date."""
+        record = replace_examples(self.record.read_text(encoding="utf-8"), {"Explain-back": [
             "| what-it-does | What does it do? | It adds two numbers for a script. | - | closed |",
             "| how-it-breaks | How does it break? | Strings are joined instead of added. | - | closed |",
             "| how-to-recover | What do you do first? | Revert the last commit and run the tests. | - | closed |"]},
             keep=("Full round",))
+        self.record.write_text(record, encoding="utf-8")
+        ownership = fill_lines(read(self.root, "OWNERSHIP.md"), {"Explain-back done": "2026-11-09"})
         files, evidence = {"OWNERSHIP.md": ownership}, "file:OWNERSHIP.md"
         if self.full:
             out, _ = check_gates.go_live_report(self.root)
@@ -174,13 +179,14 @@ class Walk:
     def own(self):
         hand = commit(self.root, {"tool.py": "def add(a, b):\n    \"\"\"Return the sum.\"\"\"\n    return a + b\n"},
                       "the owner's own change")
-        ownership = replace_examples(read(self.root, "OWNERSHIP.md"), {"Full round": [
+        record = replace_examples(self.record.read_text(encoding="utf-8"), {"Full round": [
             "| What does Adder do? | It returns a plus b. | - | closed |",
             "| Which file holds it? | tool.py. | - | closed |",
             "| Which package could you remove? | None; there are none. | - | closed |"]})
-        ownership = fill_lines(ownership, {"Hand-changed commit": hand, "Closed": "2026-11-09",
-                                           "Re-check due": "2026-11-16", "Re-check done": "-",
-                                           "Graded by": "a fresh session that compared the answers with the code"})
+        record = fill_lines(record, {"Graded by": "a fresh session that compared the answers with the code"})
+        self.record.write_text(record, encoding="utf-8")
+        ownership = fill_lines(read(self.root, "OWNERSHIP.md"), {"Hand-changed commit": hand, "Closed": "2026-11-09",
+                                                                 "Re-check due": "2026-11-16", "Re-check done": "-"})
         self.stage(6, "file:OWNERSHIP.md", {"OWNERSHIP.md": ownership}, "stage 6 Own")
 
     def retro(self):

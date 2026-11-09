@@ -21,9 +21,10 @@ from check_gates import (  # noqa: E402
     dependency_problems,
     explain_back_problems,
     file_map_problems,
+    full_round_problems,
     go_live_problems,
-    ownership_problems,
     parse_stages,
+    project_ownership_problems,
     recheck_note,
     retro_problems,
 )
@@ -31,7 +32,8 @@ from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a
 
 ALL = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "BUILD-LEDGER.md",
        "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md",
-       "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "GO-LIVE.md", "OWNERSHIP.md")
+       "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "GO-LIVE.md", "OWNERSHIP.md",
+       "OWNERSHIP-RECORD.md")
 
 
 SECTIONS = {
@@ -164,8 +166,22 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(go_live_problems(text.replace(EXAMPLE_MARKER, ""), sources, {}), [])
         self.assertTrue(go_live_problems(text.replace(EXAMPLE_MARKER, ""), sources | {"ATK-9"}, {}))
 
-    def test_ownership_template_explain_back_parses_and_only_the_example_marker_fails_it(self):
-        text = read("OWNERSHIP.md")
+    def test_project_ownership_template_holds_no_answers(self):
+        """The project's OWNERSHIP.md may be public: it names where the private record is and when, nothing else."""
+        text = visible(read("OWNERSHIP.md"))
+        self.assertEqual(missing_sections(text, ("Explain-back",)), ["Explain-back"])
+        self.assertEqual(missing_sections(text, ("Full round",)), ["Full round"])
+        self.assertNotIn("| Question |", text)
+        self.assertNotIn("Graded by", text)
+        self.assertIn("Record: ../<project>-internal/ownership/OWNERSHIP.md", text)
+
+    def test_project_ownership_template_lines_fail_until_filled_in(self):
+        left = [p.message for p in project_ownership_problems(read("OWNERSHIP.md"), TEMPLATES, True, True)]
+        for label in ("Explain-back done", "Hand-changed commit", "Closed", "Re-check due"):
+            self.assertTrue(any(label in m for m in left), (label, left))
+
+    def test_record_template_explain_back_parses_and_only_the_example_marker_fails_it(self):
+        text = read("OWNERSHIP-RECORD.md")
         for header in ("| Topic | Question | Answer | Gap | Status |", "| Question | Answer | Gap | Status |"):
             self.assertIn(header, visible(text))
         problems = explain_back_problems(text, {})
@@ -173,13 +189,17 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(all(EXAMPLE_MARKER in p.message for p in problems), problems)
         self.assertEqual(explain_back_problems(text.replace(EXAMPLE_MARKER, ""), {}), [])
 
-    def test_ownership_template_full_round_and_lines_fail_until_filled_in(self):
-        text = read("OWNERSHIP.md")
+    def test_ci_workflow_runs_the_stage_gate_in_ci_mode(self):
+        """A CI runner never has the private record; without the flag every project past stage 5 would stay red."""
+        text = (TEMPLATES / "agentic-checks.yml").read_text(encoding="utf-8")
+        self.assertIn("python checks/check_gates.py --private-unavailable .", text)
+
+    def test_record_template_full_round_fails_until_filled_in(self):
+        text = read("OWNERSHIP-RECORD.md")
         clean = text.replace(EXAMPLE_MARKER, "")
-        self.assertTrue(any(EXAMPLE_MARKER in p.message for p in ownership_problems(text, TEMPLATES, [], "small", 1, {})))
-        left = [p.message for p in ownership_problems(clean, TEMPLATES, [], "small", 1, {})]
-        for label in ("Hand-changed commit", "Graded by"):
-            self.assertTrue(any(label in m for m in left), (label, left))
+        self.assertTrue(any(EXAMPLE_MARKER in p.message for p in full_round_problems(text, "small", 1, {})))
+        left = [p.message for p in full_round_problems(clean, "small", 1, {})]
+        self.assertTrue(any("Graded by" in m for m in left), left)
         self.assertFalse(any("answer is blank" in m or "gap is" in m or "answered questions" in m for m in left), left)
 
     def test_ownership_template_has_no_recheck_note_before_it_is_filled_in(self):

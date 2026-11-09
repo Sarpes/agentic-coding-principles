@@ -8,7 +8,7 @@ Decide, with the owner understanding what they are approving, whether this is re
 
 Work in this order.
 
-1. **Explain-back.** Before the go-live review, ask the owner three questions, one on each topic: what this does, how it can break, how to recover. Write the answers word for word in `OWNERSHIP.md`, section `## Explain-back`. A separate session, not the one that wrote the code or asked the questions, compares the answers with the code and writes each gap. An open gap blocks this stage unless the owner logs an override. Never write or tidy an answer for the owner.
+1. **Explain-back.** Before the go-live review, ask the owner three questions, one on each topic: what this does, how it can break, how to recover. Write the answers word for word straight into the **private record**, section `## Explain-back`: the file the `Record:` line of the project's `OWNERSHIP.md` names, in the companion repo next to the project (usually `../<project>-internal/ownership/OWNERSHIP.md`, template `OWNERSHIP-RECORD.md`), and commit it there. Never put an answer in the project repo, not even for a moment: it may be public, and a commit keeps it in the history. If the companion repo does not exist, stop and make it first with repo-kickoff (`scaffold_project.py <project> --id <id> --co-author claude|none --internal-only`). In the project's `OWNERSHIP.md` write only the date in `Explain-back done`. A separate session, not the one that wrote the code or asked the questions, compares the answers with the code and writes each gap. An open gap blocks this stage unless the owner logs an override. Never write or tidy an answer for the owner.
 2. **Go-live review.** Run `python checks/check_gates.py --go-live`. It detects the project's traits and lists every checklist id and attack id `GO-LIVE.md` must carry. Add one row for each, then add the project-specific risks you find yourself by reading every file the project ships and runs. Each row gets a risk in plain words, a validation (the test or command that would show it), a source, a status (`proven`, `not applicable` or `overridden`) and evidence.
 3. **Reviews and audits.** Run the review, security, default-settings, documents-against-code and dependency checks in the table below, and write what each found. A finding not fixed is sorted MUST, SHOULD or LEAVE in `BUILD-LEDGER.md`.
 4. **Secrets.** Scan the whole history for the real secret values before any push (`principles/05-ship.md`, P5.1).
@@ -34,7 +34,7 @@ Give the code-review companion the base branch and the path of the design or pla
 
 ## Gate
 
-`OWNERSHIP.md` with its explain-back complete and no open gap, and `GO-LIVE.md` with a resolved row for every required id, named as `file:` evidence in `STAGES.md`, then `python checks/check_gates.py`. Every override still open must carry its re-confirmation.
+`OWNERSHIP.md` with `Record:` and `Explain-back done`, the private record it names with its explain-back complete and no open gap, and `GO-LIVE.md` with a resolved row for every required id, named as `file:` evidence in `STAGES.md`, then `python checks/check_gates.py`. Every override still open must carry its re-confirmation. A record that cannot be read fails the gate; it is reported as "could not be read", apart from a record that has no answers. The project's CI runs the gate with `--private-unavailable`, where that one case is a NOT CHECKED note, so the local run is the one that checks the answers.
 
 ## Small
 

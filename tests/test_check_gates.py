@@ -1806,6 +1806,31 @@ def ownership_doc(full=None, explain=None, commit="abc1234", closed="2026-01-01"
     return "\n".join(parts)
 
 
+RECORD_REL = "../proj-internal/ownership/OWNERSHIP.md"   # make_repo's project folder is named proj
+PROJECT_LINES = ("Hand-changed commit", "Closed", "Re-check due", "Re-check done")
+
+
+def project_ownership(commit="abc1234", closed="2026-01-01", due="2026-01-08", done="-", record=RECORD_REL,
+                      explain_done="2026-01-02", skip=(), extra=""):
+    """The project's OWNERSHIP.md after the split: where the private record is and when, never an answer."""
+    lines = (("Record", record), ("Explain-back done", explain_done), ("Hand-changed commit", commit),
+             ("Closed", closed), ("Re-check due", due), ("Re-check done", done))
+    return "# Ownership\n\n" + "\n".join(f"{k}: {v}" for k, v in lines if k not in skip) + "\n" + extra
+
+
+def record_doc(explain=None, full=None, graded="fresh session, 2026-01-01", override=None, skip=()):
+    """The private record in the companion repo: the owner's answers, the gaps and the grader."""
+    return ownership_doc(full=full, explain=explain, graded=graded, override=override,
+                         skip=PROJECT_LINES + tuple(skip))
+
+
+def write_record(root, text, rel=RECORD_REL):
+    path = (Path(root) / rel).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
+    return path
+
+
 class ExplainBackRules(GitCase):
     def check(self, text, overrides=None):
         return explain_back_problems(text, overrides or {})
@@ -2094,8 +2119,11 @@ class GoLiveTiming(GitCase):
 
     def project(self, through=6, size="small", comps=("Parser",), stage5="file:OWNERSHIP.md,file:GO-LIVE.md",
                 golive=None, explain=None, rounds=None, checklist=CHECKLIST_OK, traits_line=None, extra=None,
-                deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None, manual=None):
-        """A consistent project (Small by default) whose stages 0 to `through` are passed; arguments break one thing."""
+                deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None, manual=None,
+                record=True):
+        """A consistent project (Small by default) whose stages 0 to `through` are passed; arguments break one thing.
+        The owner's answers go to the private record next to the project (`record=False` leaves it out); the
+        project's OWNERSHIP.md holds only the pointer and the dates."""
         big = size == "full"
         root = self.make_repo({"README.md": "# p\n"})
         base = git(root, "rev-parse", "HEAD")
@@ -2106,9 +2134,13 @@ class GoLiveTiming(GitCase):
         files = {"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": attack_doc(0, size_rows=attack_rows),
                  "DECISIONS.md": DECISIONS_OK, "BUILD-LEDGER.md": LEDGER_OK,
                  "GO-LIVE.md": golive or golive_ok(["C-SEC-1", *attack_names]),
-                 "OWNERSHIP.md": ownership_doc(explain=EB_OK if explain is None else explain, full=rounds,
-                                               commit={"src": built, "base": base}[hand],
-                                               **(ownership_lines or {}))}
+                 "OWNERSHIP.md": project_ownership(commit={"src": built, "base": base}[hand],
+                                                   **{k: v for k, v in (ownership_lines or {}).items()
+                                                      if k not in ("graded", "override")})}
+        if record:
+            write_record(root, record_doc(explain=EB_OK if explain is None else explain, full=rounds,
+                                          **{k: v for k, v in (ownership_lines or {}).items()
+                                             if k in ("graded", "override")}))
         if big:
             files.update({"docs/design.md": "design\n", "docs/plans/p.md": "plan\n", "RESULTS.md": "results\n"})
         else:
@@ -2266,14 +2298,14 @@ class GoLiveTiming(GitCase):
     # ---- the explain-back
     def test_an_open_explain_back_gap_blocks_stage_5(self):
         rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="did not know", status="open")]
-        self.assert_mentions(self.only(self.project(explain=rows), "OWNERSHIP.md"), "gap")
+        self.assert_mentions(self.only(self.project(explain=rows), RECORD_REL), "gap")
 
     def test_a_missing_explain_back_topic_blocks_stage_5(self):
-        self.assert_mentions(self.only(self.project(explain=EB_OK[:2]), "OWNERSHIP.md"), "how-to-recover")
+        self.assert_mentions(self.only(self.project(explain=EB_OK[:2]), RECORD_REL), "how-to-recover")
 
     def test_the_explain_back_is_not_judged_before_stage_5(self):
         root = self.project(through=4, explain=[])
-        self.assertEqual(self.only(root, "OWNERSHIP.md"), [])
+        self.assertEqual(self.only(root, RECORD_REL), [])
 
     def test_an_overridden_ship_stage_skips_the_explain_back_and_go_live(self):
         overrides = overrides_doc(entry(1, stage="5 Ship", reconfirmed="2026-01-02"))
@@ -2288,11 +2320,11 @@ class GoLiveTiming(GitCase):
 
     # ---- the full round
     def test_the_full_round_binds_at_stage_6_and_not_before(self):
-        self.assertEqual(self.only(self.project(through=5, rounds=[]), "OWNERSHIP.md"), [])
-        self.assertTrue(self.only(self.project(through=6, rounds=[]), "OWNERSHIP.md"))
+        self.assertEqual(self.only(self.project(through=5, rounds=[]), RECORD_REL), [])
+        self.assertTrue(self.only(self.project(through=6, rounds=[]), RECORD_REL))
 
     def test_too_few_full_round_answers_are_reported_at_stage_6(self):
-        self.assert_mentions(self.only(self.project(rounds=fr_rows(2)), "OWNERSHIP.md"), "at least 3")
+        self.assert_mentions(self.only(self.project(rounds=fr_rows(2)), RECORD_REL), "at least 3")
 
     def test_a_hand_change_that_touches_no_source_is_reported_at_stage_6(self):
         self.assert_mentions(self.only(self.project(hand="base"), "OWNERSHIP.md"), "source file")
@@ -2303,13 +2335,13 @@ class GoLiveTiming(GitCase):
     def test_a_full_project_needs_one_answer_per_component(self):
         comps = ("Parser", "Store", "Exporter", "Reader")
         short = self.project(size="full", comps=comps, rounds=fr_rows(3))
-        self.assert_mentions(self.only(short, "OWNERSHIP.md"), "at least 4")
+        self.assert_mentions(self.only(short, RECORD_REL), "at least 4")
         enough = self.project(size="full", comps=comps, rounds=fr_rows(4))
-        self.assertEqual(self.only(enough, "OWNERSHIP.md"), [])
+        self.assertEqual(self.only(enough, RECORD_REL), [])
 
     def test_a_small_project_does_not_scale_with_components(self):
         root = self.project(comps=("Parser", "Store", "Exporter", "Reader"), rounds=fr_rows(3))
-        self.assertEqual(self.only(root, "OWNERSHIP.md"), [])
+        self.assertEqual(self.only(root, RECORD_REL), [])
 
     # ---- the size rule
     def test_small_with_a_dockerfile_is_refused_through_check_project(self):
@@ -2331,6 +2363,121 @@ class GoLiveTiming(GitCase):
     def test_small_with_eleven_tracked_source_files_is_refused(self):
         files = {"STAGES.md": table(), **{f"src/f{i}.py": "x = 1\n" for i in range(11)}}
         self.assert_mentions(self.only(self.make_repo(files), "STAGES.md"), "10")
+
+
+class PrivateRecord(GitCase):
+    """The owner's answers live only in the private companion repo; the project's OWNERSHIP.md points to them.
+    Fail-closed: a record that cannot be read never passes, and 'could not be read' is a different problem from
+    'no answer' (a readable record with the section missing). Borrows GoLiveTiming's project builder only, so its
+    tests do not run twice."""
+    UNREADABLE = "could not be read"
+    TODAY = GoLiveTiming.TODAY
+    project, run_all, only = GoLiveTiming.project, GoLiveTiming.run_all, GoLiveTiming.only
+
+    def run_ci(self, root):
+        return check_project(root, self.TODAY, private_unavailable=True)
+
+    def test_a_complete_project_with_its_record_passes(self):
+        self.assertEqual(self.run_all(self.project()), ([], []))
+
+    def test_a_missing_record_fails_at_stage_5(self):
+        self.assert_mentions(self.only(self.project(through=5, record=False), "OWNERSHIP.md"), self.UNREADABLE)
+
+    def test_a_missing_record_fails_at_stage_6(self):
+        self.assert_mentions(self.only(self.project(record=False), "OWNERSHIP.md"), self.UNREADABLE)
+
+    def test_a_record_that_is_a_folder_fails_as_unreadable(self):
+        root = self.project(record=False)
+        (root / RECORD_REL).resolve().mkdir(parents=True)
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), self.UNREADABLE)
+
+    def test_a_record_that_is_not_utf8_fails(self):
+        root = self.project(record=False)
+        write_record(root, b"## Explain-back\n\xff\xfe\n")
+        self.assert_mentions(self.run_all(root)[0], "not valid UTF-8")
+
+    def test_a_record_path_no_system_can_open_fails_as_unreadable_without_a_crash(self):
+        """Found by the robustness fuzz: a NUL in the path raised ValueError, not OSError, and crashed the gate."""
+        root = self.project()
+        commit(root, {"OWNERSHIP.md": project_ownership(record="../proj-internal/own\x00ership/OWNERSHIP.md")}, "nul")
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), self.UNREADABLE)
+
+    def test_no_answer_and_unreadable_are_different_problems(self):
+        root = self.project(record=False)
+        write_record(root, "# Ownership\n\nGraded by: a fresh session\n")
+        problems = self.run_all(root)[0]
+        self.assert_mentions(problems, "Explain-back")
+        self.assertFalse(any(self.UNREADABLE in m for m in messages(problems)), problems)
+
+    def test_the_record_is_not_needed_before_stage_5(self):
+        self.assertEqual(self.run_all(self.project(through=4, record=False))[0], [])
+
+    def test_a_missing_record_line_is_named(self):
+        root = self.project(ownership_lines={"skip": ("Record",)})
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), "Record")
+
+    def test_an_absolute_record_path_is_refused(self):
+        root = self.project()
+        absolute = str((root / RECORD_REL).resolve())
+        commit(root, {"OWNERSHIP.md": project_ownership(record=absolute)}, "absolute record path")
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), "relative")
+
+    def test_a_record_inside_the_project_is_refused(self):
+        root = self.project()
+        commit(root, {"OWNERSHIP.md": project_ownership(record="private/OWNERSHIP.md")}, "record inside")
+        write_record(root, record_doc(explain=EB_OK, full=fr_rows(3)), "private/OWNERSHIP.md")
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), "inside the project")
+
+    def test_answers_in_the_project_repo_are_refused_at_any_stage(self):
+        for through in (0, 5):
+            with self.subTest(through=through):
+                root = self.project(through=through)
+                text = (root / "OWNERSHIP.md").read_text(encoding="utf-8")
+                answers = "\n## Explain-back\n\n" + md_table(EB_COLS, EB_OK)
+                commit(root, {"OWNERSHIP.md": text + answers}, "answers in the repo")
+                self.assert_mentions(self.only(root, "OWNERSHIP.md"), "private record")
+
+    def test_explain_back_done_must_be_a_date_at_stage_5(self):
+        for value in ("", "soon"):
+            with self.subTest(value=value):
+                root = self.project(through=5, ownership_lines={"explain_done": value})
+                self.assert_mentions(self.only(root, "OWNERSHIP.md"), "Explain-back done")
+        root = self.project(through=5, ownership_lines={"skip": ("Explain-back done",)})
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), "Explain-back done")
+
+    def test_an_override_line_in_the_record_still_silences_its_section(self):
+        overrides = overrides_doc(entry(1, stage="5 Ship", reconfirmed="2026-01-02"))
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="unsure", status="open")]
+        root = self.project(through=5, overrides=overrides, record=False)
+        write_record(root, explain_doc(rows, "O1"))
+        self.assertEqual(self.only(root, RECORD_REL), [])
+        write_record(root, explain_doc(rows))
+        self.assert_mentions(self.only(root, RECORD_REL), "gap")
+
+    # ---- the CI mode: the private record is never present on a CI runner
+    def test_ci_mode_turns_an_unreadable_record_into_a_loud_note(self):
+        problems, notes = self.run_ci(self.project(record=False))
+        self.assertFalse(any(self.UNREADABLE in m for m in messages(problems)), problems)
+        self.assertTrue(any(n.startswith("NOT CHECKED") for n in notes), notes)
+
+    def test_ci_mode_still_checks_a_readable_record(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="did not know", status="open")]
+        self.assert_mentions(self.run_ci(self.project(explain=rows))[0], "gap")
+
+    def test_ci_mode_does_not_excuse_a_missing_record_line_or_answers_in_the_repo(self):
+        root = self.project(ownership_lines={"skip": ("Record",)}, record=False)
+        self.assert_mentions(self.run_ci(root)[0], "Record")
+
+    def test_the_command_fails_without_the_flag_and_passes_with_it(self):
+        root = self.project(record=False)
+        script = ROOT / "skills" / "agentic-principles" / "scripts" / "check_gates.py"
+        plain = subprocess.run([sys.executable, str(script), str(root)], capture_output=True, text=True)
+        self.assertEqual(plain.returncode, 1, plain.stdout + plain.stderr)
+        self.assertIn(self.UNREADABLE, plain.stdout)
+        ci = subprocess.run([sys.executable, str(script), "--private-unavailable", str(root)], capture_output=True,
+                            text=True)
+        self.assertEqual(ci.returncode, 0, ci.stdout + ci.stderr)
+        self.assertIn("NOT CHECKED", ci.stderr)
 
 
 class GoLiveCommand(GitCase):

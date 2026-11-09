@@ -123,7 +123,8 @@ Setup copies these files into the project. They are plain text, committed with t
 | `ARCHITECTURE.md` | The parts and how they connect, a map of every file, the dependencies, and how each part was tested | Grows from 1 Design to 5 Ship |
 | `BUILD-LEDGER.md` | What was built task by task, and the reviewer's findings | 3 Build |
 | `GO-LIVE.md` | The risks your project's traits bring, each with evidence (Full size only) | 5 Ship |
-| `OWNERSHIP.md` | Your explain-back answers and the closed-book round, in your own words, with the re-check date | 5 Ship, 6 Own |
+| `OWNERSHIP.md` | Where your private ownership record is (`Record:`), when the explain-back was done, the commit you changed by hand, and the re-check dates. Never your answers | 5 Ship, 6 Own |
+| Private record, outside the project | Your explain-back answers and the closed-book round, in your own words, with the gaps and who graded them. It lives in a private companion repo next to the project (`../<project>-internal/ownership/OWNERSHIP.md`), because the project repo may be public | 5 Ship, 6 Own |
 | `OVERRIDES.md` | Every gate you chose to skip: why, and the risk you accepted (Full size; created at the first override on Small) | Any stage |
 | `GLOSSARY.md` | Every term explained to you once, so nothing is explained twice | Any stage |
 
@@ -134,6 +135,14 @@ The agent never writes what only you can give: your explain-back answers, your a
 ### The ownership re-check
 
 At Stage 6 you explain the project without the agent. A gap you cannot explain keeps the stage open, and a re-check is set within a week. At the next session after that date, the agent does the re-check before any other work.
+
+### Your answers stay private
+
+Your answers show how well you understand your own system, so they never go into the project repository, even a private one: a repository can be made public later, and a commit keeps its history. They go into a private companion repository next to the project, `<project>-internal`, which [repo-kickoff](https://github.com/Sarpes/repo-kickoff) creates (`scaffold_project.py ... --internal-only` adds one to an existing project). The project's `OWNERSHIP.md` names that record in its `Record:` line, and `check_gates.py` reads the answers from there:
+
+- **Fail-closed.** From Stage 5 on, a record that cannot be read fails the gate, reported as "could not be read". A readable record without answers is a different problem, reported by the section it lacks.
+- **Answers in the project are refused** at every stage, so one cannot slip in early.
+- **CI.** The companion is never checked out in the project's continuous integration, so the workflow runs `check_gates.py --private-unavailable`: only the "could not be read" case becomes a printed `NOT CHECKED` note there. Your local run, without the flag, is the one that checks the answers.
 
 ## What a run looks like
 

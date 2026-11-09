@@ -41,6 +41,7 @@ Say in plain words, in this order: what the stage is for; the evidence that will
   4. Set the stage to `overridden` with the override id.
 - **"Just mark it passed, no override":** refuse plainly and kindly. `passed` is a statement that evidence exists; the owner may skip work, but cannot make a missing file exist. Offer the two real paths: do the work, or a one-minute override.
 - **Never write what only the owner can give:** answers to the explain-back or the Stage 6 round, an approval, an override's reason, a re-confirmation, a grade. Offer to ask the questions instead.
+- **The owner's answers never enter the project repo.** They go only into the private record in the companion repo next to the project (the `Record:` line of `OWNERSHIP.md`); the gate refuses them in the project at every stage.
 
 ## Rules at every stage
 
