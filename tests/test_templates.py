@@ -23,6 +23,7 @@ from check_gates import (  # noqa: E402
     file_map_problems,
     go_live_problems,
     ownership_problems,
+    parse_stages,
     recheck_note,
     retro_problems,
 )
@@ -112,6 +113,11 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("checks/check_docs.py", text)
         self.assertIn("checks/check_gates.py", text)
         self.assertNotIn("secrets.", text)
+
+    def test_stages_template_starts_at_cycle_1_and_parses_cleanly(self):
+        stages = parse_stages(read("STAGES.md"))
+        self.assertEqual(stages.cycle, 1)
+        self.assertEqual(stages.errors, [])
 
     def test_templates_pass_the_gate(self):
         for name, rule in (("DECISIONS.md", decisions_problems),

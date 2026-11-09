@@ -84,6 +84,7 @@ class Stages:
     method: str | None = None
     adopted_at: int | None = None
     adopted_at_line: int = 0
+    cycle: int | None = None
     traits: set[str] | None = None
     rows: dict[int, Row] = field(default_factory=dict)
     errors: list[tuple[int, str]] = field(default_factory=list)      # (line, message), turned into Problems later
@@ -216,6 +217,11 @@ def commit_is_after(root, first: str, commit: str) -> bool:
     """True for a commit strictly after `first` on the same line of history."""
     a, b = resolve_commit(root, first), resolve_commit(root, commit)
     return bool(a and b and a != b and is_ancestor(root, a, b))
+
+
+def cycle_start(root, name: str, cycle) -> str | None:
+    """Stub for the red commit."""
+    return None
 
 
 # ------------------------------------------------------------------- STAGES.md

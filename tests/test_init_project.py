@@ -566,12 +566,12 @@ class TestNewCycle(InitCase):
         self.assertEqual((root / "STAGES.md").read_bytes(), b"nothing useful here\n")
         self.assertFalse((root / "docs").exists())
 
-    def test_the_report_tells_the_owner_to_commit_in_two_steps(self):
+    def test_the_report_names_the_new_cycle_number(self):
         root, _ = self.make_project("small")
         report = init_project.new_cycle(root)
-        self.assertTrue(any("two commits" in note for note in report.notes), report.notes)
+        self.assertTrue(any("Cycle: 2" in note for note in report.notes), report.notes)
 
-    def test_after_the_two_step_commit_the_gate_is_clean(self):
+    def test_after_a_two_step_commit_the_gate_is_clean(self):
         root, report = self.make_project("small")
         self.commit_report(root, report)
         made = init_project.new_cycle(root)
@@ -584,17 +584,160 @@ class TestNewCycle(InitCase):
         problems = self.gate(root)
         self.assertEqual(problems, [], messages(problems))
 
+    def cycle_of(self, root):
+        return check_gates.parse_stages((root / "STAGES.md").read_text(encoding="utf-8")).cycle
+
+    def test_init_writes_cycle_1(self):
+        root, _ = self.make_project("small")
+        self.assertEqual(self.cycle_of(root), 1)
+
+    def test_each_new_cycle_adds_one(self):
+        root, _ = self.make_project("small")
+        init_project.new_cycle(root)
+        self.assertEqual(self.cycle_of(root), 2)
+        init_project.new_cycle(root)
+        self.assertEqual(self.cycle_of(root), 3)
+
+    def test_an_old_file_without_a_cycle_line_becomes_cycle_2(self):
+        root, _ = self.make_project("small")
+        path = root / "STAGES.md"
+        path.write_text(path.read_text(encoding="utf-8").replace("\nCycle: 1\n", "\n", 1), encoding="utf-8")
+        init_project.new_cycle(root)
+        self.assertEqual(self.cycle_of(root), 2)
+
+    def test_the_archive_keeps_the_old_cycle_number(self):
+        root, _ = self.make_project("small")
+        init_project.new_cycle(root)
+        archived = (root / "docs" / "archive" / "STAGES-cycle-1.md").read_text(encoding="utf-8")
+        self.assertEqual(check_gates.parse_stages(archived).cycle, 1)
+
+    def test_a_one_commit_new_cycle_starts_at_that_commit_and_the_gate_is_clean(self):
+        root, report = self.make_project("small")
+        self.commit_report(root, report)
+        made = init_project.new_cycle(root)
+        git(root, "add", "--", made.created[0], "STAGES.md")
+        git(root, "commit", "-q", "-m", "second cycle in one commit")
+        head = git(root, "rev-parse", "HEAD")
+        self.assertEqual(check_gates.cycle_start(root, "STAGES.md", 2), head)
+        problems = self.gate(root)
+        self.assertEqual(problems, [], messages(problems))
+
     def test_cli_new_cycle(self):
         root, _ = self.make_project("small")
         code, out, _ = run_main("--new-cycle", str(root))
         self.assertEqual(code, 0)
         self.assertTrue(list((root / "docs" / "archive").glob("STAGES*.md")))
-        self.assertIn("two commits", out)
+        self.assertIn("Cycle: 2", out)
 
     def test_cli_new_cycle_on_a_missing_folder_exits_2(self):
         with tempfile.TemporaryDirectory() as tmp:
             code, _, _ = run_main("--new-cycle", str(Path(tmp) / "nowhere"))
         self.assertEqual(code, 2)
+
+
+class TestLinks(InitCase):
+    """A link inside a cloned project must never lead a write to a file outside it."""
+
+    def outside(self, name="outside.txt", content=b"do not touch\n"):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / name
+        path.write_bytes(content)
+        return path
+
+    def link(self, link: Path, target: Path):
+        link.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(target, link, target_is_directory=target.is_dir())
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f"symbolic links cannot be created here ({error}); the link tests need them")
+
+    def test_claude_md_that_is_a_link_to_an_outside_file_is_refused(self):
+        root, outside = self.make_repo(), self.outside()
+        self.link(root / "CLAUDE.md", outside)
+        with self.assertRaises(InitError):
+            init_project.init(root, "small", "normal")
+        self.assertEqual(outside.read_bytes(), b"do not touch\n")
+        self.assertFalse((root / "STAGES.md").exists())
+
+    def test_a_link_to_a_file_inside_the_project_is_refused_too(self):
+        root = self.make_repo()
+        self.link(root / "CLAUDE.md", root / "README.md")
+        with self.assertRaises(InitError):
+            init_project.init(root, "small", "normal")
+        self.assertEqual((root / "README.md").read_bytes(), b"# project\n")
+
+    def test_a_dangling_link_in_place_of_a_template_is_refused(self):
+        root = self.make_repo()
+        gone = self.outside().parent / "missing.txt"
+        self.link(root / "DECISIONS.md", gone)
+        with self.assertRaises(InitError):
+            init_project.init(root, "small", "normal")
+        self.assertFalse(gone.exists())
+        self.assertFalse((root / "STAGES.md").exists())
+
+    def test_a_folder_link_that_leaves_the_project_is_refused(self):
+        root, outside = self.make_repo(), self.outside()
+        self.link(root / "checks", outside.parent)
+        with self.assertRaises(InitError):
+            init_project.init(root, "small", "normal")
+        self.assertEqual(sorted(p.name for p in outside.parent.iterdir()), ["outside.txt"])
+
+    def test_a_check_script_that_is_a_link_is_refused_by_update_checks(self):
+        root, _ = self.make_project("small")
+        outside = self.outside()
+        (root / "checks" / "check_gates.py").unlink()
+        self.link(root / "checks" / "check_gates.py", outside)
+        with self.assertRaises(InitError):
+            init_project.update_checks(root)
+        self.assertEqual(outside.read_bytes(), b"do not touch\n")
+
+    def test_stages_md_that_is_a_link_is_refused_by_new_cycle(self):
+        root = self.make_repo()
+        outside = self.outside(content=b"Size: small\nMethod: normal\nCycle: 1\n")
+        self.link(root / "STAGES.md", outside)
+        with self.assertRaises(InitError):
+            init_project.new_cycle(root)
+        self.assertEqual(outside.read_bytes(), b"Size: small\nMethod: normal\nCycle: 1\n")
+        self.assertFalse((root / "docs").exists())
+
+    def test_an_archive_folder_link_is_refused_by_new_cycle(self):
+        root, _ = self.make_project("small")
+        outside = self.outside()
+        self.link(root / "docs", outside.parent)
+        before = (root / "STAGES.md").read_bytes()
+        with self.assertRaises(InitError):
+            init_project.new_cycle(root)
+        self.assertEqual((root / "STAGES.md").read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in outside.parent.iterdir()), ["outside.txt"])
+
+    def test_cli_exits_2_for_a_linked_destination(self):
+        root, outside = self.make_repo(), self.outside()
+        self.link(root / "CLAUDE.md", outside)
+        self.assertEqual(run_main(str(root), "--size", "small", "--method", "normal")[0], 2)
+        self.assertEqual(outside.read_bytes(), b"do not touch\n")
+
+    def test_the_guard_reads_links_without_needing_the_operating_system_to_make_one(self):
+        root = self.make_repo()
+        original = Path.is_symlink
+        with mock.patch.object(Path, "is_symlink", lambda self: self.name == "CLAUDE.md" or original(self)):
+            with self.assertRaises(InitError):
+                init_project.init(root, "small", "normal")
+        self.assertFalse((root / "STAGES.md").exists())
+
+    def test_ordinary_files_are_not_mistaken_for_links(self):
+        root, report = self.make_project("small")
+        self.assertIn("STAGES.md", report.created)
+        report = init_project.update_checks(root)
+        self.assertEqual(report.updated, [])
+
+    def test_a_replacement_leaves_no_temporary_file_behind(self):
+        root, _ = self.make_project("small")
+        (root / "checks" / "check_gates.py").write_bytes(b"# old\n")
+        init_project.update_checks(root)
+        init_project.new_cycle(root)
+        names = [p.name for p in root.rglob("*") if p.is_file() and ".git" not in p.parts]
+        self.assertEqual([n for n in names if ".tmp" in n], [])
 
 
 class TestCli(InitCase):
