@@ -24,6 +24,7 @@ from check_gates import (  # noqa: E402
     attack_problems,
     attack_rungs,
     check_project,
+    cycle_start,
     components,
     dependency_problems,
     detect_traits,
@@ -87,10 +88,10 @@ def row(n, status, evidence="", override="-"):
     return n, f"| {STAGE_NAMES[n]} | {status} | {evidence} | {override} |"
 
 
-def table(*rows, size="small", method="normal", extra=()):
+def table(*rows, size="small", method="normal", extra=(), cycle=1):
     given = dict(rows)
     body = [given.get(n) or f"| {STAGE_NAMES[n]} | open | - | - |" for n in range(8)]
-    head = [f"Size: {size}", f"Method: {method}", *extra, "",
+    head = [f"Size: {size}", f"Method: {method}", f"Cycle: {cycle}", *extra, "",
             "| Stage | Status | Evidence | Override |", "|---|---|---|---|"]
     return "\n".join(head + body) + "\n"
 
@@ -302,6 +303,126 @@ class StageRules(GitCase):
     def test_table_inside_a_comment_is_ignored(self):
         text = "<!--\n" + table(row(0, "passed")) + "-->\n" + STAGES_OPEN
         self.assertEqual(self.check(text), [])
+
+
+class CycleRules(GitCase):
+    """The Cycle line: the start of a cycle is the oldest commit whose STAGES.md holds the current Cycle value."""
+
+    def two_cycle_repo(self, one_commit):
+        """Work done in cycle 1, then a second cycle started in one commit or in two (remove, then add)."""
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": table(cycle=1)}, "setup")
+        old_work = commit(root, {"BUILD-LEDGER.md": LEDGER_OK, "app.py": "x = 1\n"}, "work in cycle one")
+        if not one_commit:
+            commit(root, remove=("STAGES.md",), message="archive the first cycle")
+        start = commit(root, {"STAGES.md": table(cycle=2)}, "second cycle setup")
+        return root, old_work, start
+
+    def stage3(self, root, commit_hash, cycle=2):
+        text = table(row(3, "passed", f"commit:{commit_hash},file:BUILD-LEDGER.md"), cycle=cycle)
+        return stage_problems(text, root, ls(root), {})
+
+    def test_cycle_line_is_parsed(self):
+        self.assertEqual(parse_stages(table(cycle=3)).cycle, 3)
+
+    def test_missing_cycle_line_is_a_problem(self):
+        stages = parse_stages(table().replace("Cycle: 1\n", ""))
+        self.assertTrue(any("Cycle" in m for _, m in stages.errors), stages.errors)
+
+    def test_malformed_cycle_lines_are_problems_at_their_line(self):
+        for bad in ("Cycle: x", "Cycle: 0", "Cycle: -1", "Cycle: 1.5", "Cycle:"):
+            with self.subTest(bad=bad):
+                text = table().replace("Cycle: 1", bad)
+                stages = parse_stages(text)
+                self.assertIn(line_of(text, bad), [n for n, m in stages.errors if "Cycle" in m], stages.errors)
+                self.assertIsNone(stages.cycle)
+
+    def test_a_second_cycle_line_is_a_problem(self):
+        stages = parse_stages(table(extra=("Cycle: 2",)))
+        self.assertTrue(any("twice" in m for _, m in stages.errors), stages.errors)
+
+    def test_a_cycle_line_inside_a_comment_does_not_count(self):
+        stages = parse_stages("<!--\nCycle: 5\n-->\n" + table().replace("Cycle: 1\n", ""))
+        self.assertIsNone(stages.cycle)
+
+    def test_a_stages_file_without_cycle_is_reported_by_the_project_check(self):
+        root = self.make_repo({"README.md": "x\n"})
+        commit(root, {"STAGES.md": table().replace("Cycle: 1\n", "")}, "setup")
+        self.assertTrue(any("Cycle" in p.message for p in check_project(root)[0]))
+
+    def test_start_is_the_oldest_commit_that_holds_the_value(self):
+        root = self.make_repo({"README.md": "x\n"})
+        first = commit(root, {"STAGES.md": table(cycle=1)}, "setup")
+        commit(root, {"STAGES.md": table(row(0, "adopted"), cycle=1, extra=("Adopted-at: 1",))}, "edit")
+        self.assertEqual(cycle_start(root, "STAGES.md", 1), first)
+
+    def test_start_of_a_one_commit_new_cycle_is_that_commit(self):
+        root, _, start = self.two_cycle_repo(one_commit=True)
+        self.assertEqual(cycle_start(root, "STAGES.md", 2), start)
+        self.assertNotEqual(cycle_start(root, "STAGES.md", 1), start)
+
+    def test_start_skips_the_commit_that_removed_the_file(self):
+        root, _, start = self.two_cycle_repo(one_commit=False)
+        self.assertEqual(cycle_start(root, "STAGES.md", 2), start)
+
+    def test_no_cycle_value_gives_none_even_when_history_exists(self):
+        root, _, _ = self.two_cycle_repo(one_commit=True)
+        self.assertIsNone(cycle_start(root, "STAGES.md", None))
+
+    def test_a_file_committed_without_a_cycle_line_has_no_start(self):
+        root = self.make_repo({"README.md": "x\n"})
+        commit(root, {"STAGES.md": table().replace("Cycle: 1\n", "")}, "old format")
+        self.assertIsNone(cycle_start(root, "STAGES.md", None))
+
+    def test_no_commit_holding_the_value_gives_none(self):
+        root, _, _ = self.two_cycle_repo(one_commit=True)
+        self.assertIsNone(cycle_start(root, "STAGES.md", 3))
+        self.assertIsNone(cycle_start(root, "NOPE.md", 1))
+
+    def test_one_commit_new_cycle_no_longer_lets_old_commits_count(self):
+        root, old_work, _ = self.two_cycle_repo(one_commit=True)
+        self.assertTrue(any("no listed commit was made after" in m for m in messages(self.stage3(root, old_work))))
+
+    def test_two_commit_new_cycle_no_longer_lets_old_commits_count(self):
+        root, old_work, _ = self.two_cycle_repo(one_commit=False)
+        self.assertTrue(any("no listed commit was made after" in m for m in messages(self.stage3(root, old_work))))
+
+    def test_a_commit_made_after_the_new_cycle_started_counts_in_both_flows(self):
+        for one_commit in (True, False):
+            with self.subTest(one_commit=one_commit):
+                root, _, _ = self.two_cycle_repo(one_commit)
+                new_work = commit(root, {"more.py": "y = 2\n"}, "work in cycle two")
+                self.assertFalse(any("after" in m for m in messages(self.stage3(root, new_work))))
+
+    def test_adopted_at_is_read_from_the_first_commit_of_the_current_cycle(self):
+        root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
+        commit(root, {"STAGES.md": table(row(0, "adopted"), row(1, "adopted"), extra=("Adopted-at: 2",))}, "one")
+        rows = [row(n, "adopted") for n in range(4)]
+        text = table(*rows, cycle=2, extra=("Adopted-at: 4",))
+        commit(root, {"STAGES.md": text}, "second cycle in one commit")
+        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+
+    def test_changing_adopted_at_inside_one_cycle_still_fires(self):
+        root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
+        commit(root, {"STAGES.md": table(row(0, "adopted"), row(1, "adopted"), extra=("Adopted-at: 2",))}, "one")
+        text = table(*[row(n, "adopted") for n in range(4)], extra=("Adopted-at: 4",))
+        problems = stage_problems(text, root, ls(root), {})
+        self.assertTrue(any("first commit" in m for m in messages(problems)), problems)
+
+    def test_the_source_before_adoption_check_looks_before_the_current_cycle_start(self):
+        root = self.make_repo({"README.md": "x\n"})
+        commit(root, {"STAGES.md": table()}, "setup")
+        commit(root, {"app.py": "x = 1\n"}, "code arrives in cycle one")
+        text = table(*[row(n, "adopted") for n in range(2)], cycle=2, extra=("Adopted-at: 2",))
+        commit(root, {"STAGES.md": text}, "second cycle with adoption")
+        self.assertFalse(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
+
+    def test_adoption_with_no_source_before_the_current_cycle_start_fires(self):
+        root = self.make_repo({"README.md": "x\n"})
+        commit(root, {"STAGES.md": table()}, "setup")
+        text = table(*[row(n, "adopted") for n in range(2)], cycle=2, extra=("Adopted-at: 2",))
+        commit(root, {"STAGES.md": text}, "second cycle with adoption")
+        self.assertTrue(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
 
 
 class AdoptionRules(GitCase):
