@@ -4,6 +4,11 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- Grilling runs on every project, Small or Full, at Stage 0 Intake and Stage 1 Design (D26). New template `templates/GRILLING.md` (copied by `init_project.py`) with an `## Intake` and a `## Design` section: a `Grilled with:` line naming the skill or the fallback, and at least 3 answered rows of challenge, owner's answer and outcome.
+- `check_gates.py`: Stages 0 and 1 need `file:GRILLING.md` in their evidence on both sizes; Stage 0 judges only the Intake section, Stage 1 only the Design section. A project already past those stages must add the record or log an override.
+- `companions.json` and the stage files: `mattpocock-skills:grilling` maps to Stages 0 and 1 for every project, with written challenges as the fallback.
+- `check_gates.py`: a git argument holding a NUL character (a commit value in `STAGES.md`, found by the robustness test) is a failed lookup instead of a crash.
+
 ## [0.2.0] - 2026-11-09
 
 - Renamed to Agentic Engineering Principles (D24): README title and logo, the GitHub repository, and the plugin and marketplace name `agentic-engineering-principles`; the skill keeps the name `agentic-principles`.

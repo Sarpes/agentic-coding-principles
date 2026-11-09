@@ -91,7 +91,7 @@ This is a core requirement: the skill is a conductor. It decides which companion
 | 0 | Starting the repository | `repo-kickoff` | | the repository's templates |
 | 0 | Researching facts from primary sources | `mattpocock-skills:research` | `anthropic-skills:deep-research` | agent reads the provider's own documents |
 | 1 | Finding out what is wanted | `superpowers:brainstorming` | | question rounds from `principles/01-design.md` |
-| 1 | Stress-testing a design (Full) | `mattpocock-skills:grilling` | | a written list of challenges |
+| 0, 1 | Grilling the owner on requirements and design, every project (amended by D26; was Stage 1, Full only) | `mattpocock-skills:grilling` | | written challenges, asked one at a time |
 | 1 | Terms and glossary | `mattpocock-skills:domain-modeling` | | `templates/GLOSSARY.md` |
 | 1 | Module boundaries | `mattpocock-skills:codebase-design` | | owner-readable note in the design |
 | 1 | Cheap throwaway experiment | `mattpocock-skills:prototype` | | a spike outside the repository |
@@ -124,8 +124,8 @@ This is a core requirement: the skill is a conductor. It decides which companion
 | Overlap | Resolution |
 |---|---|
 | Two test-first skills | `test-driven-development` governs the loop; `tdd` supplies where tests go. The skill explains each proposed test location to the owner in one plain line before it is confirmed. |
-| `brainstorming` says "writing-plans and no other skill" | Rule 6 applies. After the design is approved, the conductor runs `grilling` on Full, then closes Stage 1 and calls `writing-plans` itself at Stage 2. |
-| `grilling` words questions so "yes" accepts its recommendation | On Full the owner answers in their own words, because a one-word yes suits someone rushing too well. |
+| `brainstorming` says "writing-plans and no other skill" | Rule 6 applies. After the design is approved, the conductor runs `grilling` (every project since the owner's ruling of 2026-11-10), then closes Stage 1 and calls `writing-plans` itself at Stage 2. |
+| `grilling` words questions so "yes" accepts its recommendation | The owner answers in their own words, on every project, because a one-word yes suits someone rushing too well. |
 | `subagent-driven-development` and `executing-plans` end in `finishing-a-development-branch` | Rule 6 applies. The build stops after its final review and returns to Stage 4; finishing the branch happens at Stage 5. |
 | Review at several levels | The build method's own whole-branch review counts as the Stage 3 review and is not dropped. `code-review` at Stage 5 is a different check (spec and standards side by side) and also runs on Full. |
 | Pull request format | `mattpocock-skills:pr` uses other headings; this framework's four-part template wins. |

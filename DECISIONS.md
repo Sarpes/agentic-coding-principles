@@ -252,6 +252,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** The README grows by about sixty lines. The file table repeats names that the templates define, so a renamed template needs a README change too; the test lists the files and fails if one goes missing from the section.
 - **What would make you change it:** A README too long to scan on one screen per section, which would move the file table into a guide linked from the quick start.
 
+### D26. The owner is grilled at Stage 0 and Stage 1 on every project, and the gate checks the record
+
+- **Context:** Grilling (a companion skill that challenges a plan question by question until it holds) ran only at Stage 1 on Full projects; Small projects skipped it. On 2026-11-10 the owner ruled that it must run in every project, Small or Full, at Stage 0 Intake and Stage 1 Design. A rule in the stage instructions alone is an intention: nothing would stop a stage closing without it.
+- **Options considered:** (a) instructions only, in the stage files and the skill; (b) a new evidence file `GRILLING.md` with an `## Intake` and a `## Design` section, required in the evidence of Stages 0 and 1 on both sizes and checked by `check_gates.py`; (c) grilling rows inside `REQUIREMENTS.md` and `DECISIONS.md`.
+- **Chosen:** (b). Each section names the method (`Grilled with:` the skill, or `fallback: written challenges` when it is not installed) and holds at least 3 answered rows of challenge, owner's answer and outcome. The minimum is the same on Small and Full. Stage 0 judges only the Intake section, so the Design rows may still be the template's example.
+- **Why:** (b) turns the ruling into a check that fails a stage, and the record shows the owner's own words and what each answer changed. The fallback keeps the gate usable when the grilling skill is missing, as every companion has one.
+- **Rejected:** (a), the owner's standing rule that a rule without a check is an intention; (c), it mixes the owner's answers into files with their own formats and checks, and the Intake and Design rounds would live in two places.
+- **Cost / trade-off:** A project already past Stage 0 or 1 under the skill now fails until it adds `GRILLING.md` or logs an override. The gate counts rows; it cannot tell a searching challenge from a shallow one, or prove the answer is the owner's.
+- **What would make you change it:** Rounds that routinely produce three trivial rows, which would call for a per-size minimum or a reviewer reading the record; or a project type where grilling the requirements is impossible (for example, requirements fixed by a third party), which would call for a recorded exemption.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

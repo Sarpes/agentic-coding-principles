@@ -119,6 +119,7 @@ Setup copies these files into the project. They are plain text, committed with t
 | `STAGES.md` | Each stage's status (`open`, `passed`, `overridden`, `adopted`) and the evidence that closed it | Every stage |
 | `REQUIREMENTS.md` | What the software must do, as `REQ-1`, `REQ-2`, ... | 0 Intake |
 | `ATTACKS.md` | How it could be broken or misused, as `ATK-1`, `ATK-2`, ..., drafted by a separate session | 0 Intake |
+| `GRILLING.md` | The challenges you were grilled with on the requirements and on the design, your own answers, and what each answer changed. Every project, Small or Full | 0 Intake, 1 Design |
 | `DECISIONS.md` | Every non-obvious choice, with the options rejected | From 1 Design on |
 | `ARCHITECTURE.md` | The parts and how they connect, a map of every file, the dependencies, and how each part was tested | Grows from 1 Design to 5 Ship |
 | `BUILD-LEDGER.md` | What was built task by task, and the reviewer's findings | 3 Build |
@@ -139,8 +140,8 @@ At Stage 6 you explain the project without the agent. A gap you cannot explain k
 
 At the opening of each stage the agent says in plain words what the stage is for, what evidence will close it, and which overrides (recorded choices to skip a gate) are still open. Then the work happens:
 
-1. **Intake.** You state acceptance criteria (`REQ-1`, `REQ-2`, ...). A separate session plays the attacker and drafts an attack list (`ATK-n`: how could this be broken or misused?); you read it and add to it.
-2. **Design and plan.** Questions come before code. Decisions are logged with the options rejected. Every task gets a definition of done.
+1. **Intake.** You state acceptance criteria (`REQ-1`, `REQ-2`, ...). A separate session plays the attacker and drafts an attack list (`ATK-n`: how could this be broken or misused?); you read it and add to it. Then you are grilled on both, one challenge at a time, on every project.
+2. **Design and plan.** Questions come before code. Decisions are logged with the options rejected. The approved design is grilled the same way, on every project. Every task gets a definition of done.
 3. **Build.** A failing test comes first, then the code, then an independent review. The suite runs after every merge.
 4. **Verify.** Each part climbs the test ladder below. A real end-to-end run (the whole program, from input to final result, with the real services) happens early.
 5. **Ship.** Before release you answer, in your own words, what the project does, how it can break and how to recover (the *explain-back*). A go-live review (a list of the risks the project's traits imply, checked before anything goes live) needs evidence on every row.
@@ -185,7 +186,7 @@ Install a plugin with `/plugin install <plugin>@<marketplace>`, after adding its
 |---|---|---|---|
 | `repo-kickoff` | Local skill for starting a repository and for auditing that its documents match its code | 0, 5 | Local skill, not from a marketplace |
 | `superpowers` | Brainstorming, writing plans, the sub-agent and normal build methods, test-first loop, answering review, verification before claims, finishing a branch | 1 to 5 | claude-plugins-official |
-| `mattpocock-skills` | Research, stress-testing a design, glossary, module boundaries, prototypes, test placement, hard-bug diagnosis, branch review | 0 to 5 | claude-plugins-official |
+| `mattpocock-skills` | Research, grilling you on the requirements and the design (every project), glossary, module boundaries, prototypes, test placement, hard-bug diagnosis, branch review | 0 to 5 | claude-plugins-official |
 | `andrej-karpathy-skills` | Agent habits: state assumptions, keep it simple, change only what is needed | 1 to 3 | karpathy-skills |
 | `anthropic-skills` | Deep research across sources, for facts that need primary documents | 0 | Not an installable plugin here; see below |
 | `property-based-testing` | Generated inputs over the whole input range (rung 3) | 4 | trailofbits |

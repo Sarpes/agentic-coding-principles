@@ -233,3 +233,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The release now, as the owner decided, with the open limits stated in the release notes.
 - **What I changed or rejected, and why:** The plan put two checks before the release: a new session confirming the skill loads on its own, and an acceptance run on a past project. The owner chose to release first; both checks stay open and are named in the release notes.
 - **Where the AI was wrong, and how I noticed:** No new error in this step.
+
+### 30. Grilling on every project, at Intake and Design (2026-11-10)
+
+- **Prompt (or summary of it):** Grill-me must run in every project, Small or Full, at Stage 0 and Stage 1; implement the gate. Save the plan for installing the companion skills for later.
+- **What the AI produced:** Failing tests first (commit ddf5600), then `templates/GRILLING.md`, `grilling_problems` and the Stage 0 and 1 evidence rule in `check_gates.py`, the companion row moved to Stages 0 and 1, the stage files, the skill's overlap table, the README and the design document (D26). The install plan went to its own document and pull request.
+- **What I kept:** The owner's ruling as given: the same minimum of 3 answered challenges on Small and Full, at both stages.
+- **What I changed or rejected, and why:** The AI had proposed grilling at Stage 1 for every project and at Stage 0 only for the requirements; the owner made both stages mandatory for every project. The bundle plugin and install commands were deferred by the owner and saved as a plan.
+- **Where the AI was wrong, and how I noticed:** The test helper that fills a template line demanded exactly one empty line, but the grilling template has two (one per section); the walk test failed on it and the helper now fills a chosen one. Adding the new section names to the robustness test's vocabulary changed its random documents and exposed an older crash: a NUL in a commit value from `STAGES.md` reached `git` and raised. It is fixed in the shared git helper, with its own test.
