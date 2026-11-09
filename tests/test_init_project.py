@@ -369,7 +369,8 @@ class TestAdopt(InitCase):
         code, _, _ = run_main(str(root), "--size", "small", "--method", "normal", "--adopt-at", "5")
         self.assertEqual(code, 0)
 
-    def test_second_cycle_reads_adopted_at_from_the_new_file(self):
+    def test_second_cycle_cannot_adopt_even_from_a_new_file(self):
+        """Ruling R26: adoption belongs to cycle 1 only, and is measured from the first commit that added STAGES.md."""
         root = self.make_repo({"README.md": "x\n", "app.py": "print(1)\n"})
         first = init_project.init(root, "small", "normal", adopt_at=2)
         self.commit_report(root, first)
@@ -381,7 +382,7 @@ class TestAdopt(InitCase):
         git(root, "add", "--", "STAGES.md")
         git(root, "commit", "-q", "-m", "second cycle setup")
         problems = self.gate(root)
-        self.assertEqual(problems, [], messages(problems))
+        self.assertTrue(any("cycle 1" in m for m in messages(problems)), messages(problems))
 
     def test_a_restarted_stages_file_that_reuses_the_cycle_number_is_caught(self):
         root = self.make_repo({"README.md": "x\n", "app.py": "print(1)\n"})

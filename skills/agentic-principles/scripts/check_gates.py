@@ -227,6 +227,14 @@ def cycle_start(root, name: str, cycle) -> str | None:
     return found
 
 
+def first_added(root, name: str) -> str | None:
+    """The oldest commit that ever added `name`, or None. Adoption is anchored here and not at the start of a
+    cycle, because a Cycle number written by hand would otherwise make a fresh start for the adoption checks."""
+    out = git_text(root, "log", "--full-history", "--diff-filter=A", "--reverse", "--format=%H", "--", name)
+    found = (out or "").split()
+    return found[0] if found else None
+
+
 def resolve_commit(root, ref: str) -> str | None:
     out = git_text(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
     return out.strip() if out else None
@@ -561,7 +569,7 @@ def stage_problems(text: str, root, tracked, overrides: dict, file: str = STAGES
             problems += _override_cell_problems(row, overrides, file)
         elif row.status == "reopened" and n != 6:
             problems.append(Problem(file, row.line, f"{row.name}: 'reopened' is only allowed for stage 6 Own"))
-    problems += _adoption_problems(stages, root, first_commit, file)
+    problems += _adoption_problems(stages, root, file)
     return problems
 
 
@@ -605,13 +613,18 @@ def _override_cell_problems(row: Row, overrides: dict, file: str) -> list[Proble
     return []
 
 
-def _adoption_problems(stages: Stages, root: Path, first_commit, file: str) -> list[Problem]:
+def _adoption_problems(stages: Stages, root: Path, file: str) -> list[Problem]:
+    """Adoption is measured from the oldest commit that ever added the file, and only cycle 1 may adopt."""
     adopted = [r for r in stages.rows.values() if r.status == "adopted"]
     n = stages.adopted_at
     problems = []
     if n is not None and n > MAX_ADOPTED_AT:
         problems.append(Problem(file, stages.adopted_at_line, f"Adopted-at: {n} is too high; it may be at most "
                                 f"{MAX_ADOPTED_AT}, so that 5 Ship and 6 Own are always done"))
+    if n is not None and stages.cycle is not None and stages.cycle != 1:
+        problems.append(Problem(file, stages.adopted_at_line, f"Adopted-at is allowed only in cycle 1, and this "
+                                f"file says Cycle: {stages.cycle}; a later cycle starts from work done under the "
+                                "process, so none of its stages can be adopted"))
     for r in adopted:
         if n is None:
             problems.append(Problem(file, r.line, f"{r.name} is adopted but there is no 'Adopted-at: N' line"))
@@ -620,7 +633,7 @@ def _adoption_problems(stages: Stages, root: Path, first_commit, file: str) -> l
                                                   "may be adopted"))
     if not adopted or n is None:
         return problems
-    first = first_commit()
+    first = first_added(root, file)
     if first is None:
         return problems + [Problem(file, stages.adopted_at_line, f"{file} is not committed yet; commit it so "
                                    "the Adopted-at line can be checked against its first commit")]
