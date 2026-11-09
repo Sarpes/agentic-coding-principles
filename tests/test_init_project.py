@@ -2,11 +2,13 @@
 import contextlib
 import io
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "agentic-principles" / "scripts"
@@ -173,6 +175,18 @@ class TestInit(InitCase):
         with self.assertRaises(InitError):
             init_project.init(root / "README.md", "small", "normal")
 
+    def test_a_changed_stages_template_layout_is_refused_and_writes_nothing(self):
+        root = self.make_repo()
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "templates"
+            shutil.copytree(ROOT / "templates", copy)
+            text = (copy / "STAGES.md").read_text(encoding="utf-8").replace("\nSize: small\n", "\nSize: any\n")
+            (copy / "STAGES.md").write_text(text, encoding="utf-8")
+            with mock.patch.object(init_project, "TEMPLATES", copy):
+                with self.assertRaises(InitError):
+                    init_project.init(root, "small", "normal")
+        self.assertFalse((root / "DECISIONS.md").exists())
+
     def test_template_files_copy_the_templates_exactly(self):
         root, _ = self.make_project("full")
         for name in ("DECISIONS.md", "ATTACKS.md", "OVERRIDES.md", "GO-LIVE.md", "OWNERSHIP.md"):
@@ -243,6 +257,23 @@ class TestClaudeBlock(InitCase):
     def test_a_closing_marker_without_an_opening_one_is_refused(self):
         with self.assertRaises(InitError):
             init_project.claude_block(f"text\n{MARK_CLOSE}\n")
+
+    def test_two_blocks_are_refused_not_a_third_added(self):
+        two = f"{MARK_OPEN}\na\n{MARK_CLOSE}\n\n{MARK_OPEN}\nb\n{MARK_CLOSE}\n"
+        with self.assertRaises(InitError):
+            init_project.claude_block(two)
+
+    def test_markers_in_the_wrong_order_are_refused(self):
+        with self.assertRaises(InitError):
+            init_project.claude_block(f"{MARK_CLOSE}\ntext\n{MARK_OPEN}\n")
+
+    def test_a_claude_md_that_is_not_utf8_is_refused_and_left_alone(self):
+        root = self.make_repo()
+        (root / "CLAUDE.md").write_bytes(b"caf\xe9 rules\n")
+        with self.assertRaises(InitError):
+            init_project.init(root, "small", "normal")
+        self.assertEqual((root / "CLAUDE.md").read_bytes(), b"caf\xe9 rules\n")
+        self.assertFalse((root / "STAGES.md").exists())
 
     def test_windows_line_endings_stay_windows_line_endings(self):
         text = init_project.claude_block("# Rules\r\n\r\nline\r\n")
@@ -594,6 +625,13 @@ class TestCli(InitCase):
 
     def test_cli_with_no_arguments_exits_2(self):
         self.assertEqual(run_main()[0], 2)
+
+    def test_cli_modes_do_not_mix(self):
+        root = self.make_repo()
+        self.assertEqual(run_main("--where", str(root))[0], 2)
+        self.assertEqual(run_main("--update-checks", str(root), "--new-cycle", str(root))[0], 2)
+        self.assertEqual(run_main("--new-cycle", str(root), "--size", "small")[0], 2)
+        self.assertFalse((root / "STAGES.md").exists())
 
     def test_cli_broken_claude_markers_exit_2(self):
         root = self.make_repo({"README.md": "x\n", "CLAUDE.md": f"{MARK_OPEN}\nunfinished\n"})

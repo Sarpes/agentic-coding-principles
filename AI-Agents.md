@@ -145,3 +145,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The first drafts cited the NIST landing page although the text had been read from the PDF, and gave Google SRE book chapter numbers and a full chapter title that came from memory, not from the pages fetched. Both were found while checking each citation against the pages read, and replaced with the PDF address and the chapter names as fetched.
+
+### 19. Project setup script (2026-11-09)
+
+- **Prompt (or summary of it):** Write the script that starts or adopts a project under the skill: it copies the templates and gate scripts, writes a marked block into the project's instructions file, adds a continuous-integration workflow, refreshes the copied checks and archives the stage record for a new cycle, test-first against a stub, with real temporary git repositories.
+- **What the AI produced:** 83 tests in a first commit (75 failing or erroring against the stub), then `init_project.py`, the workflow template and a Retro/workflow test in the template tests; the script opens every copied file in create-only mode and reports what it kept.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** All tests passed on the first run, so 42 rules were broken on a throwaway copy; 3 survived (two marker blocks, markers in the wrong order, a non-UTF-8 instructions file) and got tests, then all 3 went red. Also, a new cycle written in place shows git a modified file, not a new one, which would weaken the commit-evidence rule; the script now tells the owner to commit the removal and the new file separately.
