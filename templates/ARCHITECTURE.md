@@ -62,7 +62,8 @@ cell holds exactly one part, written as it appears there. The five rungs are the
   4 Real integration     a clean-clone start and a run with the real services
   5 Deliberate failure   kill, cut or corrupt something; the system recovers or fails visibly
 Each rung cell holds a tracked test or results file (tests/test_a.py, or tests/test_a.py::test_name), or a
-commit hash on the current history, or "n/a: <reason>". Small projects need rungs 1 and 2; Full projects need all
+commit hash on the current history, or "n/a: <reason>". STAGES.md, OVERRIDES.md, archived STAGES files, this
+file and empty files are refused: they prove no test. Small projects need rungs 1 and 2; Full projects need all
 five; any attack also needs the rung its ATTACKS.md row names (3 or 5), on any size.
 -->
 

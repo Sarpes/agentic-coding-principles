@@ -46,6 +46,7 @@ SIZES = ("small", "full")
 METHODS = ("normal", "sub-agent")
 STAGES_FILE = "STAGES.md"
 OVERRIDES_FILE = "OVERRIDES.md"
+ARCHIVE_FOLDER = "docs/archive/"           # where init_project.py --new-cycle keeps the STAGES.md of earlier cycles
 EXAMPLE_MARKER = "(EXAMPLE)"
 MAX_ADOPTED_AT = 5
 # File types that count as source code: for the adoption check here and for the size and hand-change checks later.
@@ -951,6 +952,21 @@ def dependency_problems(text, deps, unreadable, overrides, file: str = ARCHITECT
     return problems
 
 
+def is_gate_record(rel: str) -> bool:
+    """STAGES.md, OVERRIDES.md or an archived STAGES file under docs/archive/: the gate's own records."""
+    folded = rel.casefold()
+    return folded in (STAGES_FILE.casefold(), OVERRIDES_FILE.casefold()) or (
+        folded.startswith(ARCHIVE_FOLDER) and posixpath.basename(folded).startswith("stages"))
+
+
+def _not_rung_evidence(rel: str, root) -> bool:
+    """A tracked file that proves no test: a gate record, ARCHITECTURE.md (which holds the table), or an empty file."""
+    if is_gate_record(rel) or rel.casefold() == ARCHITECTURE_FILE.casefold():
+        return True
+    path = Path(root) / rel
+    return path.is_file() and not path.read_bytes().strip()
+
+
 def _rung_problem(cell: str, root, tracked: set[str]):
     """Why a test-table cell is not acceptable evidence (None when it is)."""
     text = cell.strip()
@@ -961,16 +977,23 @@ def _rung_problem(cell: str, root, tracked: set[str]):
         if reason and reason.group(1).strip() and not PLACEHOLDER.fullmatch(reason.group(1).strip()):
             return None
         return "'n/a' needs a reason: write 'n/a: <reason>'"
+    refused = []
     for token in re.split(r"[\s,;()`'\"]+", text):
         token = token.split("::")[0].rstrip(".")
         if not token:
             continue
-        if norm_path(token) in tracked:
-            return None
+        rel = norm_path(token)
+        if rel in tracked:
+            if not _not_rung_evidence(rel, root):
+                return None
+            refused.append(rel)
         if re.fullmatch("[0-9a-f]{7,40}", token):
             resolved = resolve_commit(root, token)
             if resolved and is_ancestor(root, resolved, "HEAD"):
                 return None
+    if refused:
+        return (f"{', '.join(refused)} cannot be rung evidence: the gate's own records, {ARCHITECTURE_FILE} and "
+                "empty files prove no test; name a test or results file or a commit, or write 'n/a: <reason>'")
     return f"'{text}' holds no tracked file or commit on the current history; write one, or 'n/a: <reason>'"
 
 
