@@ -394,13 +394,14 @@ class CycleRules(GitCase):
                 new_work = commit(root, {"more.py": "y = 2\n"}, "work in cycle two")
                 self.assertFalse(any("after" in m for m in messages(self.stage3(root, new_work))))
 
-    def test_adopted_at_is_read_from_the_first_commit_of_the_current_cycle(self):
+    def test_adopted_at_in_a_later_cycle_fires_even_when_that_cycle_starts_with_it(self):
         root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
         commit(root, {"STAGES.md": table(row(0, "adopted"), row(1, "adopted"), extra=("Adopted-at: 2",))}, "one")
         rows = [row(n, "adopted") for n in range(4)]
         text = table(*rows, cycle=2, extra=("Adopted-at: 4",))
         commit(root, {"STAGES.md": text}, "second cycle in one commit")
-        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+        problems = stage_problems(text, root, ls(root), {})
+        self.assertIn(line_of(text, "Adopted-at: 4"), [p.line for p in problems if "cycle 1" in p.message], problems)
 
     def test_changing_adopted_at_inside_one_cycle_still_fires(self):
         root = self.make_repo({"README.md": "x\n", "app.py": "x = 1\n"})
@@ -409,13 +410,13 @@ class CycleRules(GitCase):
         problems = stage_problems(text, root, ls(root), {})
         self.assertTrue(any("first commit" in m for m in messages(problems)), problems)
 
-    def test_the_source_before_adoption_check_looks_before_the_current_cycle_start(self):
+    def test_the_source_before_adoption_check_looks_before_the_first_commit_that_added_stages(self):
         root = self.make_repo({"README.md": "x\n"})
         commit(root, {"STAGES.md": table()}, "setup")
         commit(root, {"app.py": "x = 1\n"}, "code arrives in cycle one")
         text = table(*[row(n, "adopted") for n in range(2)], cycle=2, extra=("Adopted-at: 2",))
         commit(root, {"STAGES.md": text}, "second cycle with adoption")
-        self.assertFalse(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
+        self.assertTrue(any("source" in m for m in messages(stage_problems(text, root, ls(root), {}))))
 
     def test_adoption_with_no_source_before_the_current_cycle_start_fires(self):
         root = self.make_repo({"README.md": "x\n"})
@@ -479,6 +480,52 @@ class AdoptionRules(GitCase):
     def test_adopted_at_five_is_allowed(self):
         root = self.project(stages_text=self.adopted_table(5, 0, 1, 2, 3, 4))
         self.assertEqual(stage_problems(self.adopted_table(5, 0, 1, 2, 3, 4), root, ls(root), {}), [])
+
+    def test_hand_raising_the_cycle_to_adopt_a_new_project_fires(self):
+        """Review repro: init, then code, then Cycle: 2 and Adopted-at: 5 written by hand. Both guards used to pass."""
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(5)], cycle=2, extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "bump")
+        problems = check_project(root)[0]
+        self.assert_mentions(problems, "cycle 1")
+        self.assert_mentions(problems, "first commit")
+        self.assert_mentions(problems, "source")
+
+    def test_hand_adding_adopted_at_in_cycle_1_after_the_first_commit_still_fires(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(5)], extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "adopt by hand")
+        self.assert_mentions(check_project(root)[0], "first commit")
+
+    def test_a_genuine_adoption_in_cycle_1_passes(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"main.py": "print(1)\n"}, "code that existed before the process")
+        text = table(*[row(n, "adopted") for n in range(5)], extra=("Adopted-at: 5",))
+        commit(root, {"STAGES.md": text}, "adopt at stage 5")
+        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+
+    def test_a_later_cycle_of_an_adopted_project_without_adopted_at_passes(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        commit(root, {"STAGES.md": table(*[row(n, "adopted") for n in range(2)], extra=("Adopted-at: 2",))}, "adopt")
+        text = table(cycle=2)
+        commit(root, {"STAGES.md": text}, "second cycle")
+        self.assertEqual(stage_problems(text, root, ls(root), {}), [])
+
+    def test_adoption_is_anchored_to_the_first_add_even_after_the_file_was_removed_and_added_again(self):
+        root = self.make_repo({"README.md": "# p\n"})
+        commit(root, {"STAGES.md": STAGES_OPEN}, "init")
+        commit(root, remove=("STAGES.md",), message="remove")
+        commit(root, {"main.py": "print(1)\n"}, "code")
+        text = table(*[row(n, "adopted") for n in range(2)], extra=("Adopted-at: 2",))
+        commit(root, {"STAGES.md": text}, "add again with adoption")
+        problems = stage_problems(text, root, ls(root), {})
+        self.assert_mentions(problems, "first commit")
+        self.assert_mentions(problems, "source")
 
     def test_uncommitted_stages_file_asks_for_a_commit(self):
         root = self.make_repo({"app.py": "x = 1\n"})
