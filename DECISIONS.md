@@ -252,6 +252,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** The README grows by about sixty lines. The file table repeats names that the templates define, so a renamed template needs a README change too; the test lists the files and fails if one goes missing from the section.
 - **What would make you change it:** A README too long to scan on one screen per section, which would move the file table into a guide linked from the quick start.
 
+### D26. The owner's ownership answers live in a private companion repo, and the gate reads them there fail-closed
+
+- **Context:** The explain-back and the Stage 6 round record, in the owner's own words, how well they understand the system. Until 0.2.0 they were written into `OWNERSHIP.md` in the project repo, which goes to GitHub and may be public. In a real project on 2026-11-10 the explain-back answers were committed into the project repo and had to be taken out again by undoing an unpushed commit; the stage was then passed through an override.
+- **Options considered:** (a) keep the answers in the project and rely on the repo being private; (b) keep them in a git-ignored file inside the project; (c) a private companion repo next to the project, named by a `Record:` line in the project's `OWNERSHIP.md`, read by `check_gates.py`; for where the path comes from: (c1) that line, (c2) a line in `STAGES.md`, (c3) the owner's project registry.
+- **Chosen:** (c) with (c1), default `../<project>-internal/ownership/OWNERSHIP.md`, filled in by `init_project.py`. The project file keeps only the pointer, `Explain-back done`, the hand-changed commit and the re-check dates. A record that cannot be read fails from Stage 5 on and is reported as "could not be read", apart from a readable record with no answers. An answer section in the project file is refused at every stage. The project's CI runs the gate with `--private-unavailable`, which turns only the unreadable case into a printed `NOT CHECKED` note.
+- **Why:** A private repo can be made public later, and a commit keeps the answers in its history; only a separate private repo keeps them out for good. A relative path works for anyone who uses the skill and names no machine. Keeping "could not be read" apart from "no answer" means a missing companion can never look like a pass or like an owner who did not answer.
+- **Rejected:** (a), the case above; (b), a git-ignored file is lost on a new machine or a clean, and nothing reviews it; (c2), it splits ownership facts across two files; (c3), a registry exists only on the owner's machine and CI never has it. For CI: failing every project past Stage 5 forever, which teaches people to ignore a red build, and dropping the stage gate from CI, which would stop checking every other stage there.
+- **Cost / trade-off:** Breaking for projects already under the skill: their `OWNERSHIP.md` must move its answers to the companion and gain `Record:` and `Explain-back done` lines, or the gate fails. CI no longer proves that the answers exist; only a local run does. The companion repo must sit next to the project on every machine that runs the gate locally.
+- **What would make you change it:** An owner who works on several machines without the companion repo cloned beside the project, which would call for a configurable record location; or a way for CI to read the private record safely.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
@@ -260,6 +270,7 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 
 ## Not done (and why)
 
+- Other private documents (status notes, build logs) into the same companion repo: the owner deferred it on 2026-11-10; only the ownership answers move now (D26).
 - Tool-call guard hook: planned for a later version; the owner already has one (not public).
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
