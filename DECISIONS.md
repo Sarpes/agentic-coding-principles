@@ -172,6 +172,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** The evidence format is strict, so a typo costs a re-run. A commit proves a commit exists, not that the owner reviewed it, because the owner and the agent share one git identity (design section 3). "One review row per task" on Full size is enforced only as at least one filled review row, because the gate cannot know the task count.
 - **What would make you change it:** A stage whose real evidence is neither a file nor a commit, such as a running service, would need a third evidence type.
 
+### D18. Architecture checks bind at the stage that needs the document
+
+- **Context:** `ARCHITECTURE.md` has a file map, a dependency table and a test table, and `ATTACKS.md` has the attack list. A file map can only agree with `git ls-files` once the files exist, but the evidence for stage 4 already names `ARCHITECTURE.md`. Checking everything as soon as the file exists would turn continuous integration red during the build.
+- **Options considered:** (a) check every section whenever the file exists; (b) check every section when stage 4 is passed; (c) bind each check to the stage that needs it: the attack list at stage 0, the test table at stage 4, the file map and dependency table at stage 5.
+- **Chosen:** (c), implemented in `architecture_problems`, called from `check_project`. A missing `ARCHITECTURE.md` is reported only when stage 5 is passed, because stage 4 already reports it as missing evidence.
+- **Why:** The attack list is written at intake, the test table is filled while verifying, and the file map and dependencies are final only at shipping. Each section is judged exactly when its stage is marked passed, so a build in progress stays green and a closed stage cannot keep a stale document. A section may carry `Override: O<n>`; it counts only while that override is open and names the same stage.
+- **Rejected:** (a), because every commit during the build would fail on a half-written map; (b), because the map would then be judged a stage before the files are final and a later file would slip past, or be flagged twice.
+- **Cost / trade-off:** A wrong file map is not reported until stage 5, so an owner who keeps the document current is not warned earlier. Manifests the script cannot read (Poetry, `Pipfile`, `go.mod` and others) force a manual line, so those projects get a weaker dependency check; a manifest the script cannot read is reported and never skipped. Duplicate problems from two checks are reported once.
+- **What would make you change it:** A real project where a stale map at stage 4 caused a wrong decision would justify checking the map from stage 4.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
