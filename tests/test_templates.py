@@ -24,6 +24,7 @@ from check_gates import (  # noqa: E402
     go_live_problems,
     ownership_problems,
     recheck_note,
+    retro_problems,
 )
 from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a test: a check function)
 
@@ -98,6 +99,19 @@ class TemplateTests(unittest.TestCase):
 
     def test_glossary_template_is_well_formed(self):
         self.assertEqual(glossary_problems(read("GLOSSARY.md")), [])
+
+    def test_ai_agents_template_has_a_retro_section_that_the_gate_reads_as_empty(self):
+        text = read("AI-Agents.md")
+        self.assertEqual(missing_sections(text, ("Retro",)), [])
+        self.assertTrue(retro_problems(text), "the template's Retro section must start empty")
+        self.assertEqual(retro_problems(text.replace("## Retro\n", "## Retro\n\nThree mistakes became a rule.\n")), [])
+
+    def test_workflow_template_fetches_full_history_and_uses_no_secrets(self):
+        text = (TEMPLATES / "agentic-checks.yml").read_text(encoding="utf-8")
+        self.assertIn("fetch-depth: 0", text)
+        self.assertIn("checks/check_docs.py", text)
+        self.assertIn("checks/check_gates.py", text)
+        self.assertNotIn("secrets.", text)
 
     def test_templates_pass_the_gate(self):
         for name, rule in (("DECISIONS.md", decisions_problems),
