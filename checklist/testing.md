@@ -40,7 +40,7 @@ Ways of testing that catch what simple tests miss. A *test* is a small program t
 
 ### C-TEST-5 Inject failures on purpose and record how to repeat them
 
-- **Rule:** Make the things your program depends on fail on purpose (stop the database, cut the network, make an outside service slow) and check that your program behaves as designed. Record the random seed or steps of each run so a failure can be repeated.
+- **Rule:** Make the things your program depends on fail on purpose (stop the database, cut the network, make an outside service slow) and check that your program behaves as designed. Record the random seed (the starting number that makes a random run repeatable) or the steps of each run, so a failure can be repeated.
 - **Why it matters:** Every outside service fails sometimes; code that has never seen the failure usually handles it badly, and a failure you cannot repeat cannot be fixed with confidence.
 - **Applies when:** database+paid-api+llm
 - **How to validate:** For each outside dependency, record one run with that dependency failing, the program's behaviour, and the seed or steps that reproduce it.

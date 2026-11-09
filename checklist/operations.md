@@ -22,7 +22,7 @@ What keeps a running program understandable and recoverable once real people use
 
 ### C-OPS-3 Log failed logins and refused access
 
-- **Rule:** Record every failed login, every refused access and every rejected input with enough context (when, which user, what was attempted) to investigate later, and encode the logged values so they cannot forge log lines.
+- **Rule:** Record every failed login, every refused access and every rejected input with enough context (when, which user, what was attempted) to investigate later, and clean the logged values so a user cannot add fake lines to the log.
 - **Why it matters:** Attacks show up first as a run of failures; without these records you cannot tell that an attack happened or what it reached.
 - **Applies when:** web
 - **How to validate:** Make a failed login and a refused request, and record the two log lines they produced.

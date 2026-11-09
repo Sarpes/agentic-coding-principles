@@ -31,7 +31,7 @@ How stored data is changed, protected against loss, and kept to what is needed. 
 
 ### C-DATA-4 Keep sensitive data out of web addresses and browser storage
 
-- **Rule:** API keys, session tokens and personal data never travel in the web address (*URL*) or its query string, and are not kept in browser storage, apart from the session token.
+- **Rule:** API keys, session tokens and personal data never travel in the web address (*URL*) or its query string (the part of a web address after the question mark), and are not kept in browser storage, apart from the session token.
 - **Why it matters:** Web addresses are saved in browser history, server logs and shared links; browser storage can be read by any script that runs on the page.
 - **Applies when:** web
 - **How to validate:** Use the main flows with the browser's developer tools open and record that no key, token or personal value appears in any address or in local storage.

@@ -22,7 +22,7 @@ Practices for projects that call a large language model (*LLM*, the kind of AI t
 
 ### C-AI-3 Check model output with plain code before using it
 
-- **Rule:** Treat the model's output like input from an unknown user: check its format with ordinary code, encode it before showing it on a web page, and pass it to databases only through parameterised queries.
+- **Rule:** Treat the model's output like input from an unknown user: check its format with ordinary code, encode it before showing it on a web page (turn characters that a browser would run as code into harmless text), and pass it to a database only as a separate value, never pasted into the query text (a parameterised query).
 - **Why it matters:** Model output passed straight on can carry the same attacks as hostile input (scripts, commands, queries), and it can also simply be malformed.
 - **Applies when:** llm
 - **How to validate:** Show the code that checks each kind of model output; give it malformed and hostile output in a test and record that it is rejected.
