@@ -11,6 +11,10 @@ AI-Agents.md           this repository's AI usage log (five fields each)
 principles/            index plus one file per stage (00-intake ... 07-retro)
 templates/             DECISIONS, AI-Agents, REQUIREMENTS, BUILD-LEDGER, RESULTS, HANDOVER, GLOSSARY, PR template
 checks/check_docs.py   the documentation gate (CLI)
+skills/agentic-principles/   the skill: SKILL.md, stages/, companions.json, scripts/ (init_project, check_gates, check_companions, build_checklist)
+checklist/             engineering checklist, each item with a cited source; checklist.json is generated
+.claude-plugin/        plugin and marketplace manifests
+docs/design-skill.md   the approved design of the skill
 .githooks/             pre-commit secret gate (enable after cloning: git config core.hooksPath .githooks)
 tests/                 red/green cases for every check
 docs/design.md         the approved design
@@ -22,6 +26,9 @@ docs/plans/            implementation plans
 
 - Tests: `python -m unittest -v`
 - Documentation gate: `python checks/check_docs.py` (checks the current directory; or pass a folder)
+- Stage gate (in a project under the skill): `python checks/check_gates.py` (`--go-live` lists the go-live rows)
+- Installed-skill report: `python skills/agentic-principles/scripts/check_companions.py`
+- Private-name scan: set `ACP_FORBIDDEN_NAMES` (comma-separated) before the tests, or that test is skipped
 - Enable the pre-commit secret gate after cloning: `git config core.hooksPath .githooks`
 
 Python 3.11+, standard library only.

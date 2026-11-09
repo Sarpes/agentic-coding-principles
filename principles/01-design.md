@@ -36,7 +36,7 @@
 - **Rule:** Write each decision in `DECISIONS.md` with all seven fields, number decisions without gaps, change an old decision only by an "Update" note or a superseding decision, and keep the "Assumptions" and "Not done (and why)" sections.
 - **Why (incident):** In one finished log, 70 of 73 decisions (measured at the time) lacked at least one field, 69 of them the rejected options, and one heading that grouped three decisions hid them from every check.
 - **How to check:** Run `python checks/check_docs.py .` and confirm exit 0.
-- **Enforced by:** check_docs + contract hook (planned, v0.2)
+- **Enforced by:** check_docs + contract hook (planned)
 
 ### P1.7 Keep the human's answers verbatim, with the decision each produced
 - **Rule:** Store the human's answers to design questions word for word, in a separate file, each linked to the decision it produced.

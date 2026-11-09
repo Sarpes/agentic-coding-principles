@@ -210,8 +210,7 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 
 ## Not done (and why)
 
-- Tool-call guard hook: planned for v0.2; the owner already has one (not public).
-- Skill packaging: later, by the owner's choice.
+- Tool-call guard hook: planned for a later version; the owner already has one (not public).
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
 - Checklist items for contract testing and mutation testing: none of the six chosen sources describes them (D19).
