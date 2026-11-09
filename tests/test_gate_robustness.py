@@ -9,9 +9,13 @@ Speed: git reads only committed and indexed state, which this test never changes
 between runs), so the git command results are memoised for the duration of the test. The repository and every
 first call are real git. Without the memo the 7,500 runs take far longer than a unit test should.
 """
+import contextlib
+import io
+import json
 import os
 import random
 import sys
+import tempfile
 import time
 import unittest
 from datetime import date
@@ -219,6 +223,55 @@ class GateRobustness(unittest.TestCase):
             crashes, _, runs = self.hunt(30)
         self.assertEqual(runs, 30 * len(self.seeds))
         self.assertTrue(any(c.startswith("STAGES.md") and "IndexError" in c for c in crashes), crashes[:3])
+
+
+class CompanionsRobustness(unittest.TestCase):
+    """check_companions.py promises exit 0 and a printed report whatever the user's settings file holds."""
+    KEYS = ["a\x00b@m", "../x@y", "*@*", "a@b@c", "p:q@m", "p?@m", "@m", "p@", "con@nul", "a" * 300 + "@m",
+            "x/y@m", "C:\\evil@m", "p@" + "m" * 300, "\u0131@\u015f", "p@m\n", "p@m", "p@m" + "\\" * 3]
+
+    @classmethod
+    def setUpClass(cls):
+        import check_companions
+        cls.module = check_companions
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.tmp.cleanup)
+        cls.claude = Path(cls.tmp.name)
+        skill = cls.claude / "plugins" / "cache" / "m" / "p" / "1.0" / "skills"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_bytes(b"---\nname: \xff\xfe\n---\n")
+
+    def run_main(self, settings: bytes):
+        (self.claude / "settings.json").write_bytes(settings)
+        with contextlib.redirect_stdout(io.StringIO()):
+            return self.module.main([str(self.claude)])
+
+    def test_a_plugin_key_with_a_null_character_does_not_crash(self):
+        """Found by the garbage run: the NUL made Path.glob raise ValueError and the command exited with a traceback."""
+        self.assertEqual(self.run_main(json.dumps({"enabledPlugins": {"a\x00b@m": True}}).encode()), 0)
+
+    def test_garbage_settings_never_crash(self):
+        rng = random.Random(f"{SEED}:settings")
+        valid = json.dumps({"enabledPlugins": {"p@m": True, "q@m": False}}).encode()
+        crashes = []
+        for index in range(max(100, PER_TYPE)):
+            kind = index % 5
+            if kind == 0:
+                data = bytes(rng.randrange(256) for _ in range(rng.randrange(0, 300)))
+            elif kind == 1:
+                data = valid[:rng.randrange(len(valid) + 1)]
+            elif kind == 2:
+                data = json.dumps({"enabledPlugins": {rng.choice(self.KEYS): rng.choice([True, False, None, 1, [], {}])
+                                                      for _ in range(rng.randrange(1, 5))}}).encode()
+            elif kind == 3:
+                data = rng.choice([b"[", b"{"]) * rng.randrange(1, 200000)         # nesting far beyond the parser's limit
+            else:
+                data = rng.choice([b"[]", b"null", b"\"x\"", b"1", b"{\"enabledPlugins\": []}", b"\xef\xbb\xbf{}"])
+            try:
+                self.assertEqual(self.run_main(data), 0)
+            except Exception as error:
+                crashes.append(f"#{index} kind {kind}: {type(error).__name__}: {str(error)[:100]}; {data[:40]!r}")
+        self.assertEqual(crashes[:10], [], f"{len(crashes)} settings files crashed check_companions (seed {SEED})")
 
 
 if __name__ == "__main__":
