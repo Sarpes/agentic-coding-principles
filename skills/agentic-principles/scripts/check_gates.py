@@ -119,10 +119,24 @@ REQ_ID = re.compile(r"\bREQ-\d+\b")
 ATK_ID = re.compile(r"\bATK-\d+\b")
 
 
+def _blank_comments(text: str) -> str:
+    """Remove each `<!-- ... -->` but keep its line breaks. A scan with find() is linear; the regular expression
+    `<!--.*?-->` was quadratic on a long run of unclosed `<!--` (80 KB took 8 s)."""
+    parts, at = [], 0
+    while True:
+        start = text.find("<!--", at)
+        end = text.find("-->", start + 4) if start != -1 else -1
+        if end == -1:
+            parts.append(text[at:])                          # no comment opens here, or the last one never closes
+            return "".join(parts)
+        parts.append(text[at:start])
+        parts.append("\n" * text.count("\n", start, end))
+        at = end + 3
+
+
 def clean_lines(text: str) -> list[str]:
     """Lines with HTML comments and fenced code blocks blanked, so line numbers stay true."""
-    text = re.sub(r"<!--.*?-->", lambda m: "\n" * m.group().count("\n"), normalise(text), flags=re.S)
-    lines = text.split("\n")
+    lines = _blank_comments(normalise(text)).split("\n")
     opened = None                                         # backtick count of the open fence
     for i, line in enumerate(lines):
         m = FENCE.match(line)
