@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Agentic Coding Principles: rules, stage gates, templates and a tested documentation gate for building software with an AI coding agent.
+Agentic Engineering Principles: rules, stage gates, templates and a tested documentation gate for building software with an AI coding agent.
 
 ## Layout
 

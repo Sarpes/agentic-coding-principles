@@ -1,5 +1,5 @@
 {
-  "name": "agentic-principles",
+  "name": "agentic-engineering-principles",
   "owner": {
     "name": "Sarp Esenyel"
   },
@@ -9,7 +9,7 @@
   },
   "plugins": [
     {
-      "name": "agentic-principles",
+      "name": "agentic-engineering-principles",
       "source": "./",
       "description": "Conduct a project through intake, design, plan, build, verify, ship, own and retro: installed skills are called at the right stage, a stage closes only on evidence that a script checks or on an override the owner chose, and the owner proves in a closed-book round that they can explain the result.",
       "version": "0.2.0",

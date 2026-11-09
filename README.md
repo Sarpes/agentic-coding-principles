@@ -1,6 +1,10 @@
-# Agentic Coding Principles
+# Agentic Engineering Principles
 
-[![CI](https://github.com/Sarpes/agentic-coding-principles/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarpes/agentic-coding-principles/actions/workflows/ci.yml)
+![Agentic Engineering Principles](docs/assets/logo.jpg)
+
+[![CI](https://github.com/Sarpes/agentic-engineering-principles/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarpes/agentic-engineering-principles/actions/workflows/ci.yml)
+
+*Agentic engineering* means building software with an AI coding agent while holding the work to engineering discipline: design first, tests that can fail, independent review, and a human who owns the decisions and can explain the result. *Vibe coding* is the opposite.
 
 Rules, stage gates (the evidence that must exist before work moves to the next stage), templates, a tested documentation gate, and a skill that conducts a project through all of them, for building software with an AI coding agent.
 
@@ -35,11 +39,13 @@ The index, with the four-part format of a principle and the kinds of enforcement
 **As a plugin** (the usual route). In Claude Code, add this repository as a marketplace and install the plugin:
 
 ```
-/plugin marketplace add Sarpes/agentic-coding-principles
-/plugin install agentic-principles@agentic-principles
+/plugin marketplace add Sarpes/agentic-engineering-principles
+/plugin install agentic-engineering-principles@agentic-engineering-principles
 ```
 
 This plugin has passed `claude plugin validate .` with warnings, but it has not yet been installed from the marketplace in a real session.
+
+The plugin is called `agentic-engineering-principles`; the skill inside it keeps the short name `agentic-principles`, which is the name you will see in a session.
 
 **Clone and link.** Clone the repository, then link the folder `skills/agentic-principles` into your skills folder, so the skill appears as `agentic-principles`:
 
