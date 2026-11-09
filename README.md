@@ -17,7 +17,7 @@ It is written for people who build software with an AI coding agent and are not 
 - A **skill** (a packaged set of instructions an AI coding agent loads for a kind of task) called `agentic-principles` walks the agent through the stages, calls other installed skills at the right moment, and asks for the named evidence before it marks a stage done; the scripts only check that the evidence exists (see Limits).
 - Scripts check what can be checked by code: a decision log or a requirements table with a blank field fails the build.
 
-The aim, in the owner's words: every part is tested to its limits, and a month later the owner can explain the architecture, each file, the tech stack, how each part was tested and every third-party dependency, without the agent.
+The aim, in the owner's words: every part is tested to its limits, the owner can explain the architecture, each file, the tech stack, how each part was tested and every third-party dependency, without the agent.
 
 ## The eight stages
 
