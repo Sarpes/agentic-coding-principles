@@ -2337,7 +2337,7 @@ class Command(GitCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, _, err = run_main([tmp])
         self.assertEqual(code, 2)
-        self.assertIn("git", err)
+        self.assertIn("not a git repository", err)         # the trust-limit note on stderr also says "git"
 
     def test_not_a_directory_exits_2(self):
         self.assertEqual(run_main([str(ROOT / "nope-folder")])[0], 2)
@@ -2593,7 +2593,46 @@ class WiringSurvivorRules(GitCase):
     def test_the_command_refuses_two_arguments_and_a_file(self):
         root = self.make_repo()
         self.assertEqual(run_main([str(root), str(root)])[0], 2)
-        self.assertEqual(run_main([str(root / "README.md")])[0], 2)
+        code, _, err = run_main([str(root / "README.md")])
+        self.assertEqual(code, 2)
+        self.assertIn("not a directory", err)
+
+
+class GitHelperSurvivorRules(GitCase):
+    def test_a_hand_changed_commit_with_a_non_ascii_source_name_counts_as_source(self):
+        """Without core.quotepath=off git prints such a name in quotes with octal escapes, so the extension is missed."""
+        root = self.make_repo()
+        sha = commit(root, {"café.py": "x = 1\n"}, "hand change")
+        self.assertEqual(check_gates._hand_change_problems(root, sha, 3, "OWNERSHIP.md"), [])
+
+    def test_a_tag_object_is_not_a_commit_strictly_after_its_own_commit(self):
+        """An annotated tag has its own hash; resolved without ^{commit} it would look like a different commit."""
+        root = self.make_repo()
+        first = git(root, "rev-parse", "HEAD")
+        commit(root, {"a.txt": "x\n"}, "later")
+        git(root, "tag", "-a", "-m", "setup", "setup-tag", first)
+        tag_object = git(root, "rev-parse", "setup-tag")
+        self.assertNotEqual(tag_object, first)
+        self.assertFalse(check_gates.commit_is_after(root, first, tag_object))
+        self.assertTrue(check_gates.commit_is_after(root, first, git(root, "rev-parse", "HEAD")))
+        self.assertEqual(check_gates.resolve_commit(root, tag_object), first)
+
+    def test_a_status_is_read_without_regard_to_case(self):
+        self.assertEqual(parse_overrides("### O1. t\n\n- **Status:** Open\n")["O1"].status, "open")
+
+    def test_attack_rows_inside_a_comment_do_not_count(self):
+        head = "| ID | Attack | Rung | Drafted by |\n|---|---|---|---|\n"
+        text = head + "| ATK-1 | a | 3 | x |\n<!--\n| ATK-2 | b | 3 | x |\n-->\n"
+        self.assertEqual(check_gates.attack_ids(text), {"ATK-1"})
+
+    def test_the_ancestor_test_is_true_only_for_exit_code_zero(self):
+        """merge-base exits 1 for 'not an ancestor' and 128 for an unknown object; both are False."""
+        root = self.make_repo()
+        first = git(root, "rev-parse", "HEAD")
+        later = commit(root, {"a.txt": "x\n"}, "later")
+        self.assertTrue(check_gates.is_ancestor(root, first, later))
+        self.assertFalse(check_gates.is_ancestor(root, later, first))
+        self.assertFalse(check_gates.is_ancestor(root, "0" * 40, later))
 
 
 class ManifestSurvivorRules(unittest.TestCase):
