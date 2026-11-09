@@ -141,4 +141,4 @@ The checks in `tests/` are written with a case that must fire and a look-alike t
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. © 2026 Sarp Esenyel.
