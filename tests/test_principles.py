@@ -88,8 +88,13 @@ def forbidden_in_tracked_files(root: Path, names: list[str]) -> list[str]:
     for rel in filter(None, files):
         path = root / rel
         if path.is_file():
-            text = path.read_bytes().decode("utf-8", errors="replace")
-            hits += [f"{rel}: {n}" for n in forbidden_hits(text, names)]
+            data = path.read_bytes()
+            try:
+                hits += [f"{rel}: {n}" for n in forbidden_hits(data.decode("utf-8"), names)]
+            except UnicodeDecodeError:          # binary: only whole words in readable runs, as `strings` shows them
+                runs = " ".join(m.group().decode("ascii") for m in re.finditer(rb"[\x20-\x7e]{4,}", data)).lower()
+                hits += [f"{rel}: {n}" for n in names
+                         if n and re.search(rf"(?<![a-z0-9]){re.escape(n.lower())}(?![a-z0-9])", runs)]
     return hits
 
 
@@ -205,6 +210,21 @@ class ForbiddenNamesTests(unittest.TestCase):
             self.assertEqual(forbidden_in_tracked_files(root, ["probecorp"]),
                              ["tracked.md: probecorp"])
             self.assertEqual(forbidden_in_tracked_files(root, ["absentname"]), [])
+
+    def test_binary_files_match_names_only_as_words_in_readable_text(self):
+        """The logo's compressed bytes held a three-letter forbidden name inside random bytes and failed the scan. In
+        a file that is not UTF-8, a name counts only as a whole word inside a run of readable characters, so a name
+        hidden in image metadata is still found and random bytes are not. The short name is built at run time so this
+        file does not trip the scan itself."""
+        short = "x" + "yq"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            noise = b"\xff\xd8\xa4\xd2xs\xe91\x06\xfe" + short.encode() + b"MQb\xb77\x1b\xff\xd9"
+            (root / "noise.jpg").write_bytes(noise)
+            (root / "meta.jpg").write_bytes(b"\xff\xd8\x00\x10Artist: ProbeCorp studio\x00\xff\xd9")
+            subprocess.run(["git", "add", "noise.jpg", "meta.jpg"], cwd=root, check=True)
+            self.assertEqual(forbidden_in_tracked_files(root, [short, "probecorp"]), ["meta.jpg: probecorp"])
 
 
 if __name__ == "__main__":
