@@ -633,6 +633,84 @@ class EvidenceRules(GitCase):
         self.assertEqual(self.run_check(root, 1, "small", "file:AI-Agents.md,file:DECISIONS.md"), [])
 
 
+class MarkerRules(GitCase):
+    """The template marker counts only outside comments and code fences, and a bad evidence file is reported once."""
+
+    MARKED = "(EXAMPLE)"
+
+    def item(self, text, name="REQUIREMENTS.md"):
+        root = self.make_repo({name: text})
+        return check_gates.evidence_item_problems("file", name, root, set(ls(root)))
+
+    def about(self, problems, name):
+        return [p for p in problems if p.file == name or name in p.message]
+
+    def test_a_marker_in_a_table_row_is_refused(self):
+        found = self.item(f"| ID | Requirement |\n|---|---|\n| REQ-1 | It works. {self.MARKED} |\n")
+        self.assertTrue(any(self.MARKED in m for m in found), found)
+
+    def test_a_marker_only_inside_a_one_line_comment_is_not_refused(self):
+        text = f"<!-- rows marked {self.MARKED}: replace them -->\n| ID | Requirement |\n|---|---|\n| REQ-1 | It works. |\n"
+        self.assertEqual(self.item(text), [])
+
+    def test_a_marker_only_inside_a_multi_line_comment_is_not_refused(self):
+        text = (f"<!--\nThe rows below are worked examples, marked\n{self.MARKED}: replace them and remove the marker.\n"
+                "-->\n\n| ID | Requirement |\n|---|---|\n| REQ-1 | It works. |\n")
+        self.assertEqual(self.item(text), [])
+
+    def test_a_marker_after_a_closed_comment_on_the_same_line_is_refused(self):
+        found = self.item(f"<!-- note --> | REQ-1 | It works. {self.MARKED} |\n")
+        self.assertTrue(any(self.MARKED in m for m in found), found)
+
+    def test_an_empty_evidence_file_is_reported_once(self):
+        for stage, name in ((0, "REQUIREMENTS.md"), (1, "DECISIONS.md"), (3, "BUILD-LEDGER.md"), (7, "AI-Agents.md")):
+            with self.subTest(name=name):
+                root = self.make_repo({name: "\n"})
+                problems = stage_problems(table(row(stage, "passed", f"file:{name}")), root, ls(root), {})
+                self.assertEqual(len(self.about(problems, name)), 1, problems)
+
+    def test_a_marker_bearing_evidence_file_is_reported_once(self):
+        root = self.make_repo({"DECISIONS.md": f"# Decisions\n\nNothing decided yet {self.MARKED}\n"})
+        problems = stage_problems(table(row(1, "passed", "file:DECISIONS.md")), root, ls(root), {})
+        self.assertEqual(len(self.about(problems, "DECISIONS.md")), 1, problems)
+        self.assert_mentions(problems, self.MARKED)
+
+    def test_a_good_evidence_file_still_gets_its_content_rule(self):
+        root = self.make_repo({"DECISIONS.md": "# Decisions\n\nNothing decided yet.\n"})
+        problems = stage_problems(table(row(1, "passed", "file:DECISIONS.md")), root, ls(root), {})
+        self.assert_mentions(problems, "no decision entry")
+
+    def ownership_stage(self, stage, explain, full):
+        root = self.make_repo({"OWNERSHIP.md": ownership_doc(full=full, explain=explain)})
+        return stage_problems(table(row(stage, "passed", "file:OWNERSHIP.md")), root, ls(root), {})
+
+    def marked_rounds(self):
+        return [(f"Question {i}? {self.MARKED}", "An answer.", "-", "closed") for i in range(1, 4)]
+
+    def test_stage_5_does_not_judge_the_marker_in_the_full_round(self):
+        problems = self.ownership_stage(5, EB_OK, self.marked_rounds())
+        self.assertFalse(any(self.MARKED in m for m in messages(problems)), problems)
+
+    def test_stage_5_refuses_the_marker_in_the_explain_back(self):
+        explain = [EB_OK[0], EB_OK[1], ("how-to-recover", f"Question? {self.MARKED}", "An answer.", "-", "closed")]
+        self.assert_mentions(self.ownership_stage(5, explain, fr_rows(3)), self.MARKED)
+
+    def test_stage_6_refuses_the_marker_in_the_full_round(self):
+        self.assert_mentions(self.ownership_stage(6, EB_OK, self.marked_rounds()), self.MARKED)
+
+    def test_full_round_rows_with_the_marker_never_count_as_answered(self):
+        root = self.make_repo({"src/app.py": "x = 1\n"})
+        sha = git(root, "rev-parse", "HEAD")
+        problems = ownership_problems(ownership_doc(full=self.marked_rounds(), commit=sha), root, ls(root), "small", 1,
+                                      {})
+        self.assert_mentions(problems, "0 answered questions")
+
+    def test_full_round_rows_without_the_marker_count_as_answered(self):
+        root = self.make_repo({"src/app.py": "x = 1\n"})
+        sha = git(root, "rev-parse", "HEAD")
+        self.assertEqual(ownership_problems(ownership_doc(commit=sha), root, ls(root), "small", 1, {}), [])
+
+
 # ------------------------------------------------------------------- overrides
 
 FIELD_VALUES = {"Date": "2026-11-09", "Stage": "3 Build", "What was skipped": "the second review",
