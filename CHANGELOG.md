@@ -4,6 +4,8 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+## [0.2.0] - 2026-11-09
+
 - Renamed to Agentic Engineering Principles (D24): README title and logo, the GitHub repository, and the plugin and marketplace name `agentic-engineering-principles`; the skill keeps the name `agentic-principles`.
 - `README.md`: a quick start before the stage table and a "Using it day to day" section: what each session starts with, what the owner can say, where the records live, and what the agent never writes for the owner (D25).
 

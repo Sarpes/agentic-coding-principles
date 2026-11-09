@@ -225,3 +225,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The quick start before the stage table, the table of sentences the owner can say, the table of record files, and the list of things the agent never writes for the owner.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** No new error in this step. The README it had written earlier explained the stages but not the daily routine; the owner noticed that the instructions were not clear enough for others, which prompted this step.
+
+### 29. Releasing 0.2.0 (2026-11-09)
+
+- **Prompt (or summary of it):** Merge the README pull request and release 0.2.0.
+- **What the AI produced:** After the merge, it changed the changelog test to ask for a dated 0.2.0 section and an empty Unreleased list, watched it fail, then moved the Unreleased list under the 0.2.0 heading. The tag and the GitHub release follow once CI on `main` is green.
+- **What I kept:** The release now, as the owner decided, with the open limits stated in the release notes.
+- **What I changed or rejected, and why:** The plan put two checks before the release: a new session confirming the skill loads on its own, and an acceptance run on a past project. The owner chose to release first; both checks stay open and are named in the release notes.
+- **Where the AI was wrong, and how I noticed:** No new error in this step.
