@@ -8,8 +8,8 @@ Turn the approved design into tasks small enough to check one at a time, and set
 
 1. Write the plan as a file in `docs/plans/`. Every task has a definition of done: a statement someone can check.
 2. Record the build method the owner chose, and log it in `DECISIONS.md` if that is not already done.
-3. Check the interfaces between tasks: what one task hands to the next, written the same way in both.
-4. Confirm test locations with the owner now, because a sub-agent run does not pause to ask. Explain each proposed location in one plain line.
+3. Check the interfaces between tasks. An interface is what one task hands to the next, such as a file or a function's inputs and outputs; it must be written the same way in both tasks.
+4. Confirm test locations with the owner now, because a sub-agent run (a sub-agent is a separate AI session given one job) does not pause to ask. Explain each proposed location in one plain line.
 5. Keep the four habits from Stage 1: state assumptions aloud, build the simplest thing that works, change only what the task needs, define how success will be checked.
 
 ## Companions

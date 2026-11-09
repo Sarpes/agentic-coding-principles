@@ -6,6 +6,8 @@ Write down what "done" means before anything is built, and how this could be bro
 
 ## Do
 
+This stage opens after `init_project.py` has run, so `STAGES.md` exists and the owner has chosen the size.
+
 1. Ask the owner for the acceptance criteria and write them in `REQUIREMENTS.md` as `REQ-1`, `REQ-2`, ... An acceptance criterion is a statement that can be checked as true or false.
 2. Ask whether the project will hold personal data (names, addresses, emails, anything that points to a person). No script can detect this. If yes, add `Traits: personal-data` to `STAGES.md`.
 3. Have a **separate session** draft the attack list. A fresh agent or a new conversation, one that has not discussed the solution, receives `REQUIREMENTS.md` and is asked: "How could this be broken or misused?" It writes `ATTACKS.md` as `ATK-1`, `ATK-2`, ... and names for each the ladder rung it must be tried at, 3 or 5 (rungs are in the Stage 4 file). An attacker who helped build the thing shares its blind spots, so never draft this list in the working session.

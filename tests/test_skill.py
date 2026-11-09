@@ -50,8 +50,9 @@ def frontmatter(text: str) -> dict:
 
 
 def description_trigger_hits(description: str) -> list[str]:
-    """Stub until the fix commit: the trigger phrases found in a description."""
-    return []
+    """The repository-starting skill's trigger phrases found in a description, in the order they are listed."""
+    lowered = description.lower()
+    return [phrase for phrase in KICKOFF_TRIGGERS if phrase in lowered]
 
 
 def section(text: str, heading: str) -> list[str]:

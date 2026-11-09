@@ -6,7 +6,7 @@ Settle what is being built, and what is deliberately not being built, before any
 
 ## Do
 
-1. Find out what is wanted in question rounds, each question with a recommended answer. Write no code until the owner has approved the written design (`principles/01-design.md`, P1.1).
+1. Find out what is wanted in question rounds. A question may show a recommended answer, but the owner still answers in their own words: a bare yes does not accept the recommendation. Write no code until the owner has approved the written design (`principles/01-design.md`, P1.1).
 2. Write goals, non-goals and anti-goals. An anti-goal is an outcome that counts as failure even if the software works.
 3. Classify the data and the threats in the design, as P1.5 asks.
 4. Keep product decisions with the owner. Record each in `DECISIONS.md` with its seven fields and the options rejected (P1.4, P1.6).

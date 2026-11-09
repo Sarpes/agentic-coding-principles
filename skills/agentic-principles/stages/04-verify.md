@@ -16,7 +16,7 @@ Each **part** climbs the ladder. A part is one component listed in `ARCHITECTURE
 | 4 | Real integration | Start from a clean clone using only the documented commands, then an end-to-end run with the real services. Do this early and repeat it. |
 | 5 | Deliberate failure | Kill a process, break a key, cut the network, feed corrupt data. The system recovers, or fails visibly with a reason. |
 
-1. Say plainly: **rung 2 is normally done by hand.** The mutation companion needs a separate tool (mewt or muton) that is usually not installed, and its Python support is unconfirmed. By hand means: on a throwaway copy, break each key rule and confirm a test goes red. A language-specific tool may be added as a development dependency with a decision entry.
+1. Say plainly: **rung 2 is normally done by hand.** The mutation companion needs a separate tool (mewt or muton, programs that make small deliberate changes to the code and check whether a test notices) that is usually not installed, and its Python support is unconfirmed. By hand means: on a throwaway copy (a copy of the project made only for this check and discarded after), break each key rule and confirm a test goes red. A language-specific tool may be added as a development dependency with a decision entry.
 2. Fill the test table in `ARCHITECTURE.md`. Each cell names a tracked test or results file, or a commit, or says `n/a: <reason>`. "ok" and "done" are refused. An attack must be tried at the rung its list entry names.
 3. Run rung 4 early, not only at the end.
 4. Write the results in `RESULTS.md` so the owner can check them without reading code, raw counts next to rates: "I removed the rule and 3 tests went red", "14 of 109 missed, then 109 of 109".

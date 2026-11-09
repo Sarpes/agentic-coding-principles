@@ -13,12 +13,13 @@ The owner builds software with AI agents and is not a software engineer by train
 
 1. Run `python <this skill's folder>/scripts/init_project.py --where`. It prints the folder holding `principles/`, `checklist/` and `templates/`; read from there, never from a guessed path.
 2. Find the case:
-   - **Start:** no `STAGES.md`, new work. Open Stage 0 (below), then settle size and method with the owner and run `init_project.py <folder> --size small|full --method normal|sub-agent`.
+   - **Start:** no `STAGES.md`, new work. In this order: recommend size and method (below), the owner chooses, run `init_project.py <folder> --size small|full --method normal|sub-agent`, then open Stage 0. Stage 0 needs the `STAGES.md` that setup writes and the size the owner chose.
    - **Adopt:** code exists, no `STAGES.md`. Ask which stage the work has really reached; run init with `--adopt-at N` (N at most 5). `adopted` means "not done under this skill", never "passed".
    - **Resume:** `STAGES.md` exists. The current stage is the first one not closed. If `OWNERSHIP.md` has a re-check date that has passed and no `Re-check done`, do the Stage 6 re-check first.
    - **New cycle:** every stage closed and new work is wanted: `init_project.py --new-cycle <folder>`.
-3. Run `python <this skill's folder>/scripts/check_companions.py` and compare its report with the skills listed in this session. Say out loud which companions for the current stage are missing.
-4. Load only the current stage's file, `stages/NN-name.md`, and follow it.
+3. Once `STAGES.md` exists, run `python checks/check_gates.py` in the project and tell the owner what it found: problems, open overrides, and any re-check reminder.
+4. Run `python <this skill's folder>/scripts/check_companions.py`. Its report is only a hint, because it can miss skills that do not come from the plugin cache. Compare it with this session's own skill list and, where they differ, trust the session's own skill list. Say out loud which companions for the current stage are missing.
+5. Load only the current stage's file, `stages/NN-name.md`, and follow it.
 
 ## Opening a stage
 
@@ -27,7 +28,7 @@ Say in plain words, in this order: what the stage is for; the evidence that will
 ## Size and method: you recommend, the owner chooses
 
 - Read the project, then recommend **Small** (one script or module, no live users, no personal data, no paid calls) or **Full** (everything else). Ask whether there is personal data: no script can see it. `check_gates.py` refuses Small when there is a Dockerfile or Compose file, more than 10 tracked source files, or a web, llm, paid-api or personal-data trait, so never recommend Small for such a project.
-- Offer the method: **normal** (one session works through the plan, one independent review at the end) or **sub-agent** (one writer and a separate reviewer per task, at most 5 fix rounds).
+- Offer the method: **normal** (one session works through the plan, one independent review at the end) or **sub-agent** (a sub-agent is a separate AI session given one job: one writer and a separate reviewer per task, at most 5 fix rounds).
 - The owner picks both. Write the method choice as a decision in `DECISIONS.md`. Never pick either yourself to save work.
 
 ## Closing a stage
@@ -45,7 +46,7 @@ Say in plain words, in this order: what the stage is for; the evidence that will
 
 - **Plain words.** The first time a concept appears, give it one plain sentence and add a line to the project's `GLOSSARY.md`, so nothing is explained twice.
 - **Say which layer a rule comes from:** a principle (`P` id, from a real incident, in `principles/`) or a checklist item (`C-` id, from a cited source, in `checklist/`).
-- **Approvals state their scope.** Approving one call, merge or batch approves that and nothing more. Paid calls, merges, pushes and product decisions stay with the owner. Your rulings cover implementation only, each with its cost if wrong; deferred findings are sorted MUST, SHOULD or LEAVE, never dropped.
+- **Approvals state their scope.** Approving one call, merge or batch approves that and nothing more. Paid calls, merges, pushes and product decisions stay with the owner. Your rulings (small decisions you make yourself during the build) cover implementation only, each with its cost if wrong; deferred findings are sorted MUST, SHOULD or LEAVE, never dropped.
 - **Control returns here after every companion.** Many companions end by naming their own next step. When one finishes, re-read `STAGES.md` and continue the current stage; the companion's next step gives way.
 - **A missing companion is said out loud, its fallback from `companions.json` is used, and the fact goes into that stage's evidence** (for example a line in `RESULTS.md`: "deepeval:deepeval not installed; fallback used: labelled examples checked by the owner, 18 of 20 correct"). Never skip the step silently, and never treat "install it" or "skip it" as the fallback.
 - **Order of authority:** the owner, then the project's own instructions, then this skill, then the companion. This skill may raise a companion's bar but never lowers it.
