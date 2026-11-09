@@ -391,8 +391,17 @@ def read_evidence_file(root: Path, rel: str) -> str | None:
     return None if problem else normalise(text)               # not UTF-8: reported by stage_problems, never judged
 
 
-def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str]) -> list[str]:
-    """Why one evidence item is not acceptable (empty list when it is)."""
+def _marker_text(rel: str, text: str, stage) -> str:
+    """The part of an evidence file where the template marker counts: outside comments and code fences, because
+    every template explains the marker in its own comment. For OWNERSHIP.md at stage 5 only the Explain-back
+    section counts, because the Full round belongs to stage 6."""
+    if stage == 5 and rel == OWNERSHIP_FILE:
+        return "\n".join(section_lines(text, "Explain-back") or [])
+    return "\n".join(clean_lines(text))
+
+
+def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str], stage: int | None = None) -> list[str]:
+    """Why one evidence item is not acceptable (empty list when it is). `stage` narrows the marker search."""
     if kind == "commit":
         if not re.fullmatch("[0-9a-f]{7,40}", value):
             return [f"commit:{value} is not a hexadecimal hash (7 to 40 characters from 0-9 and a-f)"]
@@ -421,7 +430,7 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str])
     text = path.read_bytes().decode("utf-8", "replace")
     if not text.strip():
         return [f"file:{value} is empty"]
-    if EXAMPLE_MARKER in text:
+    if EXAMPLE_MARKER in _marker_text(rel, text, stage):
         return [f"file:{value} still contains the template marker {EXAMPLE_MARKER}; replace the worked example"]
     return []
 
@@ -484,8 +493,11 @@ CONTENT_RULES = {
 
 
 def evidence_content_problems(stage: int, size, root, tracked, row: Row, stages_first_commit: str | None,
-                              file: str = STAGES_FILE) -> list[Problem]:
-    """What a stage's evidence must contain, and whether the named files say it."""
+                              file: str = STAGES_FILE, refused: frozenset[str] = frozenset()) -> list[Problem]:
+    """What a stage's evidence must contain, and whether the named files say it.
+
+    `refused` holds files already reported as unusable evidence (empty, or still the template's example); their
+    content is not judged again, so each such file is reported once."""
     root = Path(root)
     name = STAGE_NAMES[stage]
     items, _ = parse_evidence(row.evidence)
@@ -503,7 +515,7 @@ def evidence_content_problems(stage: int, size, root, tracked, row: Row, stages_
     tracked_set = set(tracked)
     for rel in files:
         rule = CONTENT_RULES.get((stage, rel))
-        text = read_evidence_file(root, rel) if rule and rel in tracked_set else None
+        text = read_evidence_file(root, rel) if rule and rel in tracked_set and rel not in refused else None
         if text is not None:
             problems += [Problem(rel, 0, f"{name}: {message}") for message in rule(text)]
     return problems
@@ -559,16 +571,19 @@ def _passed_problems(n, stages, row, root, tracked_set, tracked, first_commit, f
         return [Problem(file, row.line, f"{row.name} is passed but names no evidence "
                                         "(write file:<path> or commit:<hash>)")]
     problems = [Problem(file, row.line, f"{row.name}: {message}") for message in shape_errors]
+    refused = set()
     for kind, value in items:
-        found = evidence_item_problems(kind, value, root, tracked_set)
+        found = evidence_item_problems(kind, value, root, tracked_set, n)
         problems += [Problem(file, row.line, f"{row.name}: {message}") for message in found]
-        if kind == "file" and not found:                     # a usable file: its bytes must be UTF-8
+        if kind == "file" and found:
+            refused.add(norm_path(value))
+        elif kind == "file":                                 # a usable file: its bytes must be UTF-8
             rel = norm_path(value)
             problem = decode((root / rel).read_bytes(), rel)[1]
             if problem:
                 problems.append(problem)
     first = first_commit() if n == 3 else None
-    problems += evidence_content_problems(n, stages.size, root, tracked, row, first, file)
+    problems += evidence_content_problems(n, stages.size, root, tracked, row, first, file, frozenset(refused))
     return problems
 
 
@@ -1355,18 +1370,20 @@ def _ownership_lines(text: str) -> dict[str, tuple[str, int]]:
 
 
 def _answer_rows_problems(rows, question_at, answer_at, gap_at, status_at, label_of, file):
-    """(answered count, problems) for the rows of an explain-back or full-round table."""
+    """(answered count, problems) for the rows of an explain-back or full-round table. A row that still carries the
+    template marker is the template's example, never an answer, so it is not counted."""
     answered, problems = 0, []
     for number, cells in rows:
         label = label_of(cells)
-        if any(EXAMPLE_MARKER in cell for cell in cells):
+        marked = any(EXAMPLE_MARKER in cell for cell in cells)
+        if marked:
             problems.append(Problem(file, number, f"{label}: still contains the template marker {EXAMPLE_MARKER}; "
                                                   "replace the worked example"))
         if not cells[question_at].strip():
             problems.append(Problem(file, number, f"{label}: Question is blank"))
         if _blank(cells[answer_at]):
             problems.append(Problem(file, number, f"{label}: the answer is blank; the owner's words go here"))
-        else:
+        elif not marked:
             answered += 1
         if not cells[gap_at].strip():
             problems.append(Problem(file, number, f"{label}: Gap is blank; the grading session writes the gap, "
