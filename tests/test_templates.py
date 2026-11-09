@@ -6,6 +6,7 @@ guidance comments promise.
 import re
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 from checks.check_docs import ai_log_problems, decisions_problems, requirements_problems
@@ -18,13 +19,17 @@ from check_gates import (  # noqa: E402
     attack_rungs,
     components,
     dependency_problems,
+    explain_back_problems,
     file_map_problems,
+    go_live_problems,
+    ownership_problems,
+    recheck_note,
 )
 from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a test: a check function)
 
 ALL = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "BUILD-LEDGER.md",
        "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md",
-       "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md")
+       "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "GO-LIVE.md", "OWNERSHIP.md")
 
 
 SECTIONS = {
@@ -126,6 +131,39 @@ class TemplateTests(unittest.TestCase):
         self.assertTrue(file_map_problems(text, ["not-in-the-map.txt"], {}))
         self.assertTrue(dependency_problems(text, {"not-in-the-table": None}, [], {}))
         self.assertTrue(tt_problems(text, "small", parts, {}, [], TEMPLATES, {}))
+
+    def test_go_live_template_parses_and_only_the_example_marker_fails_it(self):
+        text = read("GO-LIVE.md")
+        self.assertIn("| Risk | Validation | Source | Status | Evidence |", visible(text))
+        sources = {cells[2] for cells in
+                   (line.strip("| ").split(" | ") for line in visible(text).splitlines() if "(EXAMPLE)" in line)}
+        self.assertTrue(sources)
+        problems = go_live_problems(text, sources, {})
+        self.assertGreaterEqual(len(problems), 1)
+        self.assertTrue(all(EXAMPLE_MARKER in p.message for p in problems), problems)
+        self.assertEqual(go_live_problems(text.replace(EXAMPLE_MARKER, ""), sources, {}), [])
+        self.assertTrue(go_live_problems(text.replace(EXAMPLE_MARKER, ""), sources | {"ATK-9"}, {}))
+
+    def test_ownership_template_explain_back_parses_and_only_the_example_marker_fails_it(self):
+        text = read("OWNERSHIP.md")
+        for header in ("| Topic | Question | Answer | Gap | Status |", "| Question | Answer | Gap | Status |"):
+            self.assertIn(header, visible(text))
+        problems = explain_back_problems(text, {})
+        self.assertGreaterEqual(len(problems), 1)
+        self.assertTrue(all(EXAMPLE_MARKER in p.message for p in problems), problems)
+        self.assertEqual(explain_back_problems(text.replace(EXAMPLE_MARKER, ""), {}), [])
+
+    def test_ownership_template_full_round_and_lines_fail_until_filled_in(self):
+        text = read("OWNERSHIP.md")
+        clean = text.replace(EXAMPLE_MARKER, "")
+        self.assertTrue(any(EXAMPLE_MARKER in p.message for p in ownership_problems(text, TEMPLATES, [], "small", 1, {})))
+        left = [p.message for p in ownership_problems(clean, TEMPLATES, [], "small", 1, {})]
+        for label in ("Hand-changed commit", "Graded by"):
+            self.assertTrue(any(label in m for m in left), (label, left))
+        self.assertFalse(any("answer is blank" in m or "gap is" in m or "answered questions" in m for m in left), left)
+
+    def test_ownership_template_has_no_recheck_note_before_it_is_filled_in(self):
+        self.assertIsNone(recheck_note(read("OWNERSHIP.md"), date(2100, 1, 1)))
 
     def test_all_templates_exist_and_carry_guidance(self):
         for name in ALL:

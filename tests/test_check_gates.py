@@ -1,11 +1,13 @@
 """Tests for the stage gate (check_gates.py). Real temporary git repositories are built where history matters."""
 import contextlib
 import io
+import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,16 +26,24 @@ from check_gates import (  # noqa: E402
     check_project,
     components,
     dependency_problems,
+    detect_traits,
     evidence_content_problems,
+    explain_back_problems,
     file_map_problems,
+    go_live_problems,
     main,
     manifest_dependencies,
     override_problems,
+    ownership_problems,
     parse_overrides,
     parse_stages,
+    recheck_note,
+    required_go_live_ids,
     requirement_ids,
     section_override,
+    size_problems,
     stage_problems,
+    traits_line_problems,
     tracked_files,
 )
 from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a test: a check function)
@@ -1203,6 +1213,887 @@ class Timing(GitCase):
         root = self.repo(table(row(0, "passed", "file:REQUIREMENTS.md,file:ATTACKS.md")),
                          {"ATTACKS.md": b"| ID |\n\xff\n", "REQUIREMENTS.md": REQ_OK})
         self.assertEqual(len([p for p in self.only(root, "ATTACKS.md") if "UTF-8" in p.message]), 1)
+
+
+# ----------------------------------------------------- traits, size and go-live
+
+TRAIT_DEPS = {
+    "database": ("psycopg", "psycopg2-binary", "asyncpg", "sqlalchemy", "prisma", "pg", "mysql2"),
+    "web": ("flask", "fastapi", "django", "streamlit", "express", "next"),
+    "llm": ("anthropic", "openai", "langchain", "litellm", "@anthropic-ai/sdk"),
+    "paid-api": ("stripe", "twilio"),
+    "scheduled": ("celery", "apscheduler"),
+}
+
+
+def stage_doc(size="small", extra=()):
+    return parse_stages(table(size=size, extra=extra))
+
+
+class TraitRules(GitCase):
+    def detect(self, tracked=(), deps=None):
+        return detect_traits(Path("."), list(tracked), deps or {})
+
+    def test_a_dockerfile_in_a_real_repository_means_container(self):
+        root = self.make_repo({"Dockerfile": "FROM base\n"})
+        self.assertEqual(detect_traits(root, ls(root), {}), {"container"})
+
+    def test_container_file_names(self):
+        for name in ("Dockerfile", "svc/Dockerfile", "Dockerfile.dev", "api.dockerfile", "compose.yaml",
+                     "compose.override.yml", "docker-compose.yml", "ops/docker-compose.prod.yaml"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), {"container"})
+
+    def test_look_alike_names_are_not_containers(self):
+        for name in ("README.md", "compose.txt", "composer.json", "docs/Dockerfile-notes.md", "compose.py"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), set())
+
+    def test_sql_file_and_migrations_folder_mean_database(self):
+        for name in ("schema.sql", "db/seed.SQL", "migrations/0001_init.py", "app/migrations/0002.py"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), {"database"})
+
+    def test_look_alike_database_names_are_not_database(self):
+        for name in ("notes.sqlx", "my_migrations/a.py", "migrations.md", "sql/readme.txt"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), set())
+
+    def test_crontab_file_means_scheduled(self):
+        for name in ("crontab", "ops/crontab"):
+            with self.subTest(name=name):
+                self.assertEqual(self.detect([name]), {"scheduled"})
+
+    def test_each_listed_dependency_gives_its_trait(self):
+        for trait, deps in TRAIT_DEPS.items():
+            for dep in deps:
+                with self.subTest(trait=trait, dep=dep):
+                    expected = {trait} | ({"paid-api"} if trait == "llm" else set())
+                    self.assertEqual(self.detect(deps={dep: None}), expected)
+
+    def test_anthropic_dependency_is_llm_and_paid_api(self):
+        self.assertEqual(self.detect(deps={"anthropic": None}), {"llm", "paid-api"})
+
+    def test_unlisted_dependency_gives_nothing(self):
+        self.assertEqual(self.detect(["README.md"], {"rich": None}), set())
+
+    def test_dependency_names_are_compared_in_normal_form(self):
+        self.assertEqual(self.detect(deps={"Psycopg2_Binary": "2.9.9"}), {"database"})
+
+    def test_traits_from_files_and_dependencies_add_up(self):
+        got = self.detect(["Dockerfile", "schema.sql"], {"flask": "3.0.0", "anthropic": None})
+        self.assertEqual(got, {"container", "database", "web", "llm", "paid-api"})
+
+    def test_files_inside_node_modules_are_ignored(self):
+        self.assertEqual(self.detect(["node_modules/pkg/Dockerfile", "node_modules/pkg/a.sql"]), set())
+
+
+class SizeRules(GitCase):
+    def check(self, size="small", tracked=(), traits=()):
+        return size_problems(stage_doc(size), list(tracked), set(traits))
+
+    def test_small_with_a_dockerfile_names_it(self):
+        self.assert_mentions(self.check(tracked=["Dockerfile", "a.py"]), "Dockerfile")
+
+    def test_small_with_a_compose_file_names_it(self):
+        self.assert_mentions(self.check(tracked=["compose.yaml"]), "compose")
+
+    def test_small_with_a_dockerfile_in_a_folder_names_the_path(self):
+        self.assert_mentions(self.check(tracked=["svc/Dockerfile"]), "svc/Dockerfile")
+
+    def test_eleven_source_files_name_the_limit(self):
+        self.assert_mentions(self.check(tracked=[f"src/f{i}.py" for i in range(11)]), "10")
+
+    def test_ten_source_files_pass(self):
+        self.assertEqual(self.check(tracked=[f"src/f{i}.py" for i in range(10)]), [])
+
+    def test_only_source_extensions_are_counted(self):
+        self.assertEqual(self.check(tracked=[f"docs/n{i}.md" for i in range(30)] + ["a.py"]), [])
+
+    def test_mixed_source_extensions_are_counted_together(self):
+        self.assert_mentions(self.check(tracked=[f"a{i}.py" for i in range(6)] + [f"b{i}.ts" for i in range(5)]), "10")
+
+    def test_llm_trait_is_refused_on_small(self):
+        self.assert_mentions(self.check(tracked=["a.py"], traits={"llm", "paid-api"}), "llm")
+
+    def test_personal_data_trait_is_refused_on_small(self):
+        self.assert_mentions(self.check(tracked=["a.py"], traits={"personal-data"}), "personal-data")
+
+    def test_web_trait_is_refused_on_small(self):
+        self.assert_mentions(self.check(tracked=["a.py"], traits={"web"}), "web")
+
+    def test_paid_api_trait_is_refused_on_small(self):
+        self.assert_mentions(self.check(tracked=["a.py"], traits={"paid-api"}), "paid-api")
+
+    def test_database_and_scheduled_traits_alone_are_allowed_on_small(self):
+        self.assertEqual(self.check(tracked=["a.py"], traits={"database", "scheduled"}), [])
+
+    def test_full_is_never_refused(self):
+        tracked = ["Dockerfile", "compose.yml"] + [f"src/f{i}.py" for i in range(30)]
+        self.assertEqual(self.check("full", tracked, {"web", "llm", "paid-api", "personal-data"}), [])
+
+    def test_problems_sit_on_the_size_line(self):
+        problems = self.check(tracked=["Dockerfile"])
+        self.assertEqual({p.line for p in problems}, {line_of(table(), "Size:")})
+        self.assertEqual({p.file for p in problems}, {"STAGES.md"})
+
+    def test_a_small_clean_project_passes(self):
+        self.assertEqual(self.check(tracked=["a.py", "README.md"]), [])
+
+    def test_each_refusal_is_its_own_problem(self):
+        problems = self.check(tracked=["Dockerfile"] + [f"f{i}.py" for i in range(11)], traits={"web", "llm"})
+        self.assertEqual(len(problems), 4)
+
+
+class TraitsLineRules(GitCase):
+    def test_manual_manifests_without_a_traits_line_fire(self):
+        self.assert_mentions(traits_line_problems(stage_doc(), [], True), "Traits")
+
+    def test_unreadable_manifest_without_a_traits_line_fires(self):
+        self.assert_mentions(traits_line_problems(stage_doc(), ["go.mod"], False), "Traits")
+
+    def test_traits_none_satisfies_the_rule(self):
+        self.assertEqual(traits_line_problems(stage_doc(extra=("Traits: none",)), ["go.mod"], False), [])
+
+    def test_listed_traits_satisfy_the_rule(self):
+        self.assertEqual(traits_line_problems(stage_doc(extra=("Traits: web",)), [], True), [])
+
+    def test_readable_manifests_need_no_traits_line(self):
+        self.assertEqual(traits_line_problems(stage_doc(), [], False), [])
+
+
+CHECKLIST_ALWAYS = {"id": "C-SEC-1", "applies_when": ["always"]}
+CHECKLIST_LLM = {"id": "C-LLM-1", "applies_when": ["llm"]}
+CHECKLIST_WEB = {"id": "C-WEB-1", "applies_when": ["web"]}
+CHECKLIST_EITHER = {"id": "C-DB-1", "applies_when": ["database", "scheduled"]}
+GL_COLS = ["Risk", "Validation", "Source", "Status", "Evidence"]
+
+
+def gl_rows(*cells):
+    return "# Go-live\n\n" + md_table(GL_COLS, cells)
+
+
+def golive_ok(ids):
+    return gl_rows(*[(f"risk {i}", f"check {i}", i, "proven", "ran x: 0 hits") for i in ids])
+
+
+class GoLiveRules(GitCase):
+    def check(self, text, required, overrides=None):
+        return go_live_problems(text, set(required), overrides or {})
+
+    # ---- which ids are required
+    def test_required_ids_are_always_items_matching_items_and_attacks(self):
+        got = required_go_live_ids({"llm"}, [CHECKLIST_ALWAYS, CHECKLIST_LLM, CHECKLIST_WEB], {"ATK-1"})
+        self.assertEqual(got, {"C-SEC-1", "C-LLM-1", "ATK-1"})
+
+    def test_an_item_for_another_trait_is_not_required(self):
+        self.assertNotIn("C-WEB-1", required_go_live_ids({"llm"}, [CHECKLIST_WEB], set()))
+
+    def test_with_no_traits_only_always_items_and_attacks_are_required(self):
+        got = required_go_live_ids(set(), [CHECKLIST_ALWAYS, CHECKLIST_LLM], {"ATK-1", "ATK-2"})
+        self.assertEqual(got, {"C-SEC-1", "ATK-1", "ATK-2"})
+
+    def test_one_matching_trait_is_enough(self):
+        self.assertEqual(required_go_live_ids({"scheduled"}, [CHECKLIST_EITHER], set()), {"C-DB-1"})
+
+    def test_an_item_that_applies_to_nothing_is_never_required(self):
+        item = {"id": "C-X-1", "applies_when": []}
+        self.assertEqual(required_go_live_ids({"web", "llm"}, [item], set()), set())
+
+    def test_nothing_required_when_nothing_given(self):
+        self.assertEqual(required_go_live_ids(set(), [], set()), set())
+
+    # ---- source cells
+    def test_two_ids_in_one_source_cell_fire(self):
+        text = gl_rows(("r", "v", "C-X-1, ATK-1", "proven", "ran x: 0 hits"))
+        self.assert_mentions(self.check(text, {"C-X-1", "ATK-1"}), "one id per row")
+
+    def test_a_longer_attack_id_does_not_cover_a_shorter_one(self):
+        text = gl_rows(("r", "v", "ATK-10", "proven", "ran x: 0 hits"))
+        self.assert_mentions(self.check(text, {"ATK-1"}), "ATK-1 has no row")
+
+    def test_free_text_source_leaves_the_required_id_without_a_row(self):
+        text = gl_rows(("r", "v", "s", "proven", "ran x: 0 hits"))
+        self.assert_mentions(self.check(text, {"ATK-2"}), "ATK-2")
+
+    def test_a_row_with_free_text_source_is_allowed_beside_the_required_rows(self):
+        text = gl_rows(("r", "v", "C-X-1", "proven", "ran x: 0 hits"),
+                       ("port 80 is open", "scan the host", "proposed for this project", "proven", "ran y: closed"))
+        self.assertEqual(self.check(text, {"C-X-1"}), [])
+
+    def test_source_in_backticks_still_matches(self):
+        text = gl_rows(("r", "v", "`C-X-1`", "proven", "ran x: 0 hits"))
+        self.assertEqual(self.check(text, {"C-X-1"}), [])
+
+    def test_two_rows_for_one_required_id_fire(self):
+        text = gl_rows(("r", "v", "C-X-1", "proven", "ran x: 0 hits"), ("r2", "v2", "C-X-1", "proven", "ran z: 0"))
+        self.assert_mentions(self.check(text, {"C-X-1"}), "more than one row")
+
+    def test_a_missing_required_id_is_named(self):
+        text = golive_ok(["C-X-1"])
+        problems = self.check(text, {"C-X-1", "ATK-3"})
+        self.assert_mentions(problems, "ATK-3 has no row")
+        self.assertFalse(any("C-X-1" in m for m in messages(problems)))
+
+    # ---- status
+    def test_open_row_is_unresolved(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "open", "")), {"C-X-1"}), "unresolved")
+
+    def test_blank_status_is_unresolved(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "", "ran x")), {"C-X-1"}), "unresolved")
+
+    def test_unknown_status_is_unresolved(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "done", "ran x")), {"C-X-1"}), "unresolved")
+
+    def test_proven_without_evidence_fires(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "proven", "")), {"C-X-1"}), "evidence")
+
+    def test_proven_with_a_placeholder_evidence_fires(self):
+        for filler in ("-", "n/a", "TBD", "..."):
+            with self.subTest(filler=filler):
+                self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "proven", filler)), {"C-X-1"}), "evidence")
+
+    def test_proven_with_evidence_passes(self):
+        self.assertEqual(self.check(golive_ok(["C-X-1"]), {"C-X-1"}), [])
+
+    def test_not_applicable_without_a_reason_fires(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "not applicable", "")), {"C-X-1"}), "reason")
+
+    def test_not_applicable_with_a_reason_passes(self):
+        text = gl_rows(("r", "v", "C-X-1", "not applicable", "no network access exists in this tool"))
+        self.assertEqual(self.check(text, {"C-X-1"}), [])
+
+    def test_overridden_with_an_override_that_does_not_exist_names_it(self):
+        self.assert_mentions(self.check(gl_rows(("r", "v", "C-X-1", "overridden", "O2")), {"C-X-1"}), "O2")
+
+    def test_overridden_with_an_open_override_for_ship_passes(self):
+        text = gl_rows(("r", "v", "C-X-1", "overridden", "O2"))
+        self.assertEqual(self.check(text, {"C-X-1"}, {"O2": ov("open", "5 Ship")}), [])
+
+    def test_overridden_with_an_override_for_another_stage_fires(self):
+        text = gl_rows(("r", "v", "C-X-1", "overridden", "O2"))
+        self.assert_mentions(self.check(text, {"C-X-1"}, {"O2": ov("open", "3 Build")}), "O2")
+
+    def test_overridden_with_a_closed_override_fires(self):
+        text = gl_rows(("r", "v", "C-X-1", "overridden", "O2"))
+        self.assert_mentions(self.check(text, {"C-X-1"}, {"O2": ov("closed", "5 Ship")}), "O2")
+
+    def test_overridden_without_an_override_id_in_evidence_fires(self):
+        text = gl_rows(("r", "v", "C-X-1", "overridden", "the owner agreed"))
+        self.assert_mentions(self.check(text, {"C-X-1"}, {"O2": ov("open", "5 Ship")}), "override")
+
+    # ---- shape
+    def test_no_rows_fires(self):
+        self.assert_mentions(self.check(gl_rows(), set()), "no rows")
+
+    def test_blank_risk_validation_or_source_fires(self):
+        for cells, label in ((("", "v", "C-X-1", "proven", "ran x"), "Risk"),
+                             (("r", "", "C-X-1", "proven", "ran x"), "Validation"),
+                             (("r", "v", "", "proven", "ran x"), "Source")):
+            with self.subTest(label=label):
+                self.assert_mentions(self.check(gl_rows(cells), {"C-X-1"}), label)
+
+    def test_wrong_columns_are_reported(self):
+        text = "# Go-live\n\n| Risk | Check |\n|---|---|\n| a | b |\n"
+        self.assert_mentions(self.check(text, set()), "columns")
+
+    def test_a_row_inside_a_comment_does_not_count(self):
+        text = "# Go-live\n\n<!--\n" + md_table(GL_COLS, [("r", "v", "C-X-1", "proven", "ran x")]) + "-->\n"
+        self.assertTrue(self.check(text, {"C-X-1"}))
+
+    def test_example_marker_fires(self):
+        text = gl_rows(("risk (EXAMPLE)", "v", "C-X-1", "proven", "ran x: 0 hits"))
+        self.assert_mentions(self.check(text, {"C-X-1"}), "(EXAMPLE)")
+
+    def test_bom_and_crlf_change_nothing(self):
+        text = gl_rows(("r", "v", "C-X-1", "open", ""), ("r", "v", "C-X-2", "proven", "ran x"))
+        plain = self.check(text, {"C-X-1", "C-X-2"})
+        self.assertTrue(plain)
+        self.assertEqual(self.check(BOM + text.replace("\n", "\r\n"), {"C-X-1", "C-X-2"}), plain)
+
+    def test_garbage_never_raises(self):
+        for text in ("", "\x00|||\n| |\n", "|" * 5000, "| Risk | Validation | Source | Status | Evidence |\n| a |\n",
+                     gl_rows(("r",) * 5) * 50):
+            with self.subTest(size=len(text)):
+                self.check(text, {"C-X-1"})
+
+
+TOPICS = ("what-it-does", "how-it-breaks", "how-to-recover")
+EB_COLS = ["Topic", "Question", "Answer", "Gap", "Status"]
+FR_COLS = ["Question", "Answer", "Gap", "Status"]
+
+
+def eb_row(topic, answer="It reads the file and writes a report", gap="-", status="closed"):
+    return (topic, f"Question about {topic}?", answer, gap, status)
+
+
+EB_OK = [eb_row(t) for t in TOPICS]
+
+
+def explain_doc(rows, override=None):
+    top = f"Override: {override}\n\n" if override else ""
+    return "# Ownership\n\n## Explain-back\n\n" + top + md_table(EB_COLS, rows)
+
+
+def fr_rows(count, answer="It keeps the records between runs", gap="-", status="closed"):
+    return [(f"Question {i}?", answer, gap, status) for i in range(1, count + 1)]
+
+
+def ownership_doc(full=None, explain=None, commit="abc1234", closed="2026-01-01", due="2026-01-08", done="-",
+                  graded="fresh session, 2026-01-01", override=None, skip=()):
+    top = f"Override: {override}\n\n" if override else ""
+    lines = (("Hand-changed commit", commit), ("Closed", closed), ("Re-check due", due), ("Re-check done", done),
+             ("Graded by", graded))
+    body = "\n".join(f"{label}: {value}" for label, value in lines if label not in skip)
+    parts = ["# Ownership\n"]
+    if explain is not None:
+        parts.append("## Explain-back\n\n" + md_table(EB_COLS, explain))
+    rows = fr_rows(3) if full is None else full
+    parts.append("## Full round\n\n" + top + md_table(FR_COLS, rows) + "\n" + body + "\n")
+    return "\n".join(parts)
+
+
+class ExplainBackRules(GitCase):
+    def check(self, text, overrides=None):
+        return explain_back_problems(text, overrides or {})
+
+    def test_a_missing_topic_is_named(self):
+        self.assert_mentions(self.check(explain_doc(EB_OK[:2])), "how-to-recover")
+
+    def test_a_blank_answer_fires(self):
+        rows = [EB_OK[0], eb_row("how-it-breaks", answer=""), EB_OK[2]]
+        self.assert_mentions(self.check(explain_doc(rows)), "answer")
+
+    def test_a_placeholder_answer_fires(self):
+        rows = [EB_OK[0], eb_row("how-it-breaks", answer="TBD"), EB_OK[2]]
+        self.assert_mentions(self.check(explain_doc(rows)), "answer")
+
+    def test_an_open_gap_fires(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="did not know about the backup", status="open")]
+        self.assert_mentions(self.check(explain_doc(rows)), "gap")
+
+    def test_three_closed_answers_pass(self):
+        self.assertEqual(self.check(explain_doc(EB_OK)), [])
+
+    def test_a_closed_gap_with_text_passes(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="missed the backup step, now explained")]
+        self.assertEqual(self.check(explain_doc(rows)), [])
+
+    def test_a_blank_gap_cell_fires(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="")]
+        self.assert_mentions(self.check(explain_doc(rows)), "Gap")
+
+    def test_a_status_other_than_open_or_closed_fires(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", status="done")]
+        self.assert_mentions(self.check(explain_doc(rows)), "Status")
+
+    def test_an_unknown_topic_fires(self):
+        rows = EB_OK + [eb_row("what-it-costs")]
+        self.assert_mentions(self.check(explain_doc(rows)), "what-it-costs")
+
+    def test_an_open_override_for_ship_silences_an_open_gap(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="unsure", status="open")]
+        self.assertEqual(self.check(explain_doc(rows, "O1"), {"O1": ov("open", "5 Ship")}), [])
+
+    def test_an_override_for_another_stage_does_not_silence(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="unsure", status="open")]
+        problems = self.check(explain_doc(rows, "O1"), {"O1": ov("open", "6 Own")})
+        self.assert_mentions(problems, "O1")
+        self.assert_mentions(problems, "gap")
+
+    def test_an_unknown_override_is_named_and_the_gap_still_counts(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="unsure", status="open")]
+        problems = self.check(explain_doc(rows, "O9"))
+        self.assert_mentions(problems, "O9")
+        self.assert_mentions(problems, "gap")
+
+    def test_a_missing_section_is_a_problem(self):
+        self.assert_mentions(self.check("# Ownership\n\n## Full round\n\n"), "Explain-back")
+
+    def test_an_example_marker_fires(self):
+        rows = [EB_OK[0], EB_OK[1], ("how-to-recover", "Question? (EXAMPLE)", "an answer", "-", "closed")]
+        self.assert_mentions(self.check(explain_doc(rows)), "(EXAMPLE)")
+
+    def test_bom_and_crlf_change_nothing(self):
+        text = explain_doc(EB_OK[:2])
+        self.assertEqual(self.check(BOM + text.replace("\n", "\r\n")), self.check(text))
+        self.assertTrue(self.check(text))
+
+    def test_garbage_never_raises(self):
+        for text in ("", "## Explain-back\n", "## Explain-back\n|||\n|\n", "\x00" * 100,
+                     "## Explain-back\n\n" + "| a |\n" * 500):
+            with self.subTest(size=len(text)):
+                self.check(text)
+
+
+class OwnershipRules(GitCase):
+    def setUp(self):
+        self.root = self.make_repo({"README.md": "# p\n"})
+        self.base = git(self.root, "rev-parse", "HEAD")
+        self.src = commit(self.root, {"src/app.py": "x = 1\n"}, "hand change")
+        self.docs = commit(self.root, {"README.md": "# changed\n"}, "docs only")
+
+    def check(self, text, size="small", comps=1, overrides=None):
+        return ownership_problems(text, self.root, ls(self.root), size, comps, overrides or {})
+
+    def doc(self, **given):
+        given.setdefault("commit", self.src)
+        return ownership_doc(**given)
+
+    # ---- the full round
+    def test_a_complete_document_passes(self):
+        self.assertEqual(self.check(self.doc()), [])
+
+    def test_two_answers_on_small_name_the_minimum(self):
+        self.assert_mentions(self.check(self.doc(full=fr_rows(2))), "at least 3")
+
+    def test_three_answers_on_small_pass(self):
+        self.assertEqual(self.check(self.doc(full=fr_rows(3))), [])
+
+    def test_small_does_not_scale_with_components(self):
+        self.assertEqual(self.check(self.doc(full=fr_rows(3)), "small", 9), [])
+
+    def test_four_answers_on_full_with_six_components_name_six(self):
+        self.assert_mentions(self.check(self.doc(full=fr_rows(4)), "full", 6), "at least 6")
+
+    def test_six_answers_on_full_with_six_components_pass(self):
+        self.assertEqual(self.check(self.doc(full=fr_rows(6)), "full", 6), [])
+
+    def test_full_with_two_components_still_needs_three(self):
+        self.assert_mentions(self.check(self.doc(full=fr_rows(2)), "full", 2), "at least 3")
+        self.assertEqual(self.check(self.doc(full=fr_rows(3)), "full", 2), [])
+
+    def test_blank_answers_fire_and_do_not_count(self):
+        rows = fr_rows(2) + [("Question 3?", "", "-", "closed")]
+        problems = self.check(self.doc(full=rows))
+        self.assert_mentions(problems, "answer is blank")
+        self.assert_mentions(problems, "at least 3")
+
+    def test_an_open_gap_fires(self):
+        rows = fr_rows(2) + [("Question 3?", "a wrong guess", "mixed up two modules", "open")]
+        self.assert_mentions(self.check(self.doc(full=rows)), "gap")
+
+    def test_a_closed_gap_passes(self):
+        rows = fr_rows(2) + [("Question 3?", "a first guess", "mixed up two modules; explained again", "closed")]
+        self.assertEqual(self.check(self.doc(full=rows)), [])
+
+    def test_a_blank_gap_cell_fires(self):
+        self.assert_mentions(self.check(self.doc(full=fr_rows(3, gap=""))), "Gap")
+
+    def test_a_status_other_than_open_or_closed_fires(self):
+        self.assert_mentions(self.check(self.doc(full=fr_rows(3, status="maybe"))), "Status")
+
+    def test_a_blank_question_fires(self):
+        rows = fr_rows(2) + [("", "an answer", "-", "closed")]
+        self.assert_mentions(self.check(self.doc(full=rows)), "Question")
+
+    def test_an_open_override_for_own_silences_the_table(self):
+        rows = fr_rows(1, gap="unsure", status="open")
+        problems = self.check(self.doc(full=rows, override="O1"), overrides={"O1": ov("open", "6 Own")})
+        self.assertEqual(problems, [])
+
+    def test_the_override_does_not_silence_the_lines(self):
+        problems = self.check(self.doc(full=fr_rows(1), override="O1", skip=("Graded by",)),
+                              overrides={"O1": ov("open", "6 Own")})
+        self.assert_mentions(problems, "Graded by")
+
+    def test_an_override_for_another_stage_does_not_silence(self):
+        problems = self.check(self.doc(full=fr_rows(1), override="O1"), overrides={"O1": ov("open", "5 Ship")})
+        self.assert_mentions(problems, "O1")
+        self.assert_mentions(problems, "at least 3")
+
+    def test_a_missing_full_round_section_is_a_problem(self):
+        self.assert_mentions(self.check("# Ownership\n\nGraded by: someone\n"), "Full round")
+
+    def test_an_example_marker_fires(self):
+        rows = fr_rows(2) + [("Question 3? (EXAMPLE)", "an answer", "-", "closed")]
+        self.assert_mentions(self.check(self.doc(full=rows)), "(EXAMPLE)")
+
+    # ---- the hand change
+    def test_a_commit_that_is_not_a_hash_fires(self):
+        self.assert_mentions(self.check(self.doc(commit="not-a-hash")), "commit")
+
+    def test_a_hash_that_does_not_exist_fires(self):
+        self.assert_mentions(self.check(self.doc(commit="abcdef1")), "commit")
+
+    def test_a_commit_missing_from_the_document_is_named(self):
+        self.assert_mentions(self.check(self.doc(skip=("Hand-changed commit",))), "Hand-changed commit")
+
+    def test_a_blank_commit_fires(self):
+        self.assert_mentions(self.check(self.doc(commit="")), "commit")
+
+    def test_a_commit_touching_only_a_readme_fires(self):
+        self.assert_mentions(self.check(self.doc(commit=self.docs)), "source file")
+
+    def test_a_root_commit_with_only_a_readme_fires(self):
+        self.assert_mentions(self.check(self.doc(commit=self.base)), "source file")
+
+    def test_a_commit_on_another_branch_is_not_in_history(self):
+        git(self.root, "checkout", "-q", "-b", "side")
+        side = commit(self.root, {"src/side.py": "y = 2\n"}, "on a side branch")
+        git(self.root, "checkout", "-q", "-")
+        self.assert_mentions(self.check(self.doc(commit=side)), "history")
+
+    def test_a_short_hash_works(self):
+        self.assertEqual(self.check(self.doc(commit=self.src[:8])), [])
+
+    def test_a_commit_touching_a_notebook_counts_as_source(self):
+        nb = commit(self.root, {"analysis.ipynb": "{}\n"}, "notebook")
+        self.assertEqual(self.check(self.doc(commit=nb)), [])
+
+    # ---- graded by, closed and the re-check dates
+    def test_a_missing_graded_by_line_is_named(self):
+        self.assert_mentions(self.check(self.doc(skip=("Graded by",))), "Graded by")
+
+    def test_a_placeholder_graded_by_fires(self):
+        for filler in ("", "-", "TBD"):
+            with self.subTest(filler=filler):
+                self.assert_mentions(self.check(self.doc(graded=filler)), "Graded by")
+
+    def test_a_recheck_date_eight_days_after_closing_fires(self):
+        self.assert_mentions(self.check(self.doc(closed="2026-01-01", due="2026-01-09")), "7 days")
+
+    def test_a_recheck_date_six_days_after_closing_fires(self):
+        self.assert_mentions(self.check(self.doc(closed="2026-01-01", due="2026-01-07")), "7 days")
+
+    def test_a_recheck_date_exactly_seven_days_after_closing_passes(self):
+        self.assertEqual(self.check(self.doc(closed="2026-02-25", due="2026-03-04")), [])
+
+    def test_a_recheck_date_before_closing_fires(self):
+        self.assert_mentions(self.check(self.doc(closed="2026-01-10", due="2026-01-03")), "7 days")
+
+    def test_a_closing_date_that_is_not_a_date_fires(self):
+        for bad in ("soon", "2026-13-01", "01/02/2026", ""):
+            with self.subTest(bad=bad):
+                self.assert_mentions(self.check(self.doc(closed=bad)), "Closed")
+
+    def test_a_missing_due_line_is_named(self):
+        self.assert_mentions(self.check(self.doc(skip=("Re-check due",))), "Re-check due")
+
+    def test_a_recheck_done_value_must_be_a_dash_or_a_date(self):
+        self.assert_mentions(self.check(self.doc(done="yes")), "Re-check done")
+        self.assertEqual(self.check(self.doc(done="2026-01-09")), [])
+        self.assertEqual(self.check(self.doc(done="-")), [])
+
+    def test_lines_inside_a_comment_do_not_count(self):
+        text = "# Ownership\n\n## Full round\n\n" + md_table(FR_COLS, fr_rows(3)) + "\n<!--\n" + \
+               "\n".join(f"{k}: x" for k in ("Hand-changed commit", "Closed", "Re-check due", "Re-check done",
+                                              "Graded by")) + "\n-->\n"
+        messages_ = messages(self.check(text))
+        for label in ("Hand-changed commit", "Closed", "Re-check due", "Re-check done", "Graded by"):
+            with self.subTest(label=label):
+                self.assertTrue(any(label in m for m in messages_), messages_)
+
+    def test_bom_and_crlf_change_nothing(self):
+        text = self.doc(full=fr_rows(2), graded="")
+        self.assertTrue(self.check(text))
+        self.assertEqual(self.check(BOM + text.replace("\n", "\r\n")), self.check(text))
+
+    def test_garbage_never_raises(self):
+        for text in ("", "## Full round\n", "\x00|||\n", "Graded by:" * 400, "## Full round\n\n" + "| a |\n" * 500):
+            with self.subTest(size=len(text)):
+                self.check(text)
+
+
+class RecheckNote(unittest.TestCase):
+    def lines(self, due, done="-", closed="2026-01-01"):
+        return f"Closed: {closed}\nRe-check due: {due}\nRe-check done: {done}\n"
+
+    def test_an_overdue_recheck_is_noted(self):
+        note = recheck_note(self.lines("2026-01-08"), date(2026, 1, 9))
+        self.assertIn("re-check", note)
+        self.assertIn("2026-01-08", note)
+
+    def test_the_due_day_itself_is_noted(self):
+        self.assertIn("re-check", recheck_note(self.lines("2026-01-08"), date(2026, 1, 8)))
+
+    def test_a_recheck_not_yet_due_is_silent(self):
+        self.assertIsNone(recheck_note(self.lines("2026-01-08"), date(2026, 1, 7)))
+
+    def test_a_recheck_marked_done_is_silent(self):
+        self.assertIsNone(recheck_note(self.lines("2026-01-08", done="2026-01-09"), date(2026, 1, 9)))
+
+    def test_a_missing_done_line_counts_as_not_done(self):
+        self.assertIn("re-check", recheck_note("Re-check due: 2026-01-08\n", date(2026, 1, 9)))
+
+    def test_a_missing_or_invalid_due_date_is_silent(self):
+        for text in ("", "Closed: 2026-01-01\n", self.lines("soon"), self.lines("2026-13-40")):
+            with self.subTest(text=text):
+                self.assertIsNone(recheck_note(text, date(2030, 1, 1)))
+
+    def test_a_line_inside_a_comment_does_not_count(self):
+        self.assertIsNone(recheck_note("<!--\n" + self.lines("2026-01-08") + "-->\n", date(2026, 1, 9)))
+
+    def test_bom_and_crlf_change_nothing(self):
+        text = self.lines("2026-01-08")
+        self.assertEqual(recheck_note(BOM + text.replace("\n", "\r\n"), date(2026, 1, 9)),
+                         recheck_note(text, date(2026, 1, 9)))
+
+
+CHECKLIST_OK = json.dumps([CHECKLIST_ALWAYS, CHECKLIST_LLM, CHECKLIST_WEB])
+THREE_ATTACKS = attack_doc(0, size_rows=[("ATK-1", "a", "3", "x"), ("ATK-2", "b", "-", "x"), ("ATK-3", "c", "-", "x")])
+
+
+class GoLiveTiming(GitCase):
+    """Whole projects through check_project: which check binds at which stage."""
+    TODAY = date(2026, 1, 3)
+
+    def project(self, through=6, size="small", comps=("Parser",), stage5="file:OWNERSHIP.md,file:GO-LIVE.md",
+                golive=None, explain=None, rounds=None, checklist=CHECKLIST_OK, traits_line=None, extra=None,
+                deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None, manual=None):
+        """A consistent project (Small by default) whose stages 0 to `through` are passed; arguments break one thing."""
+        big = size == "full"
+        root = self.make_repo({"README.md": "# p\n"})
+        base = git(root, "rev-parse", "HEAD")
+        commit(root, {"STAGES.md": table()}, "stages")
+        built = commit(root, {"src/app.py": "x = 1\n", E: "x = 1\n"}, "built")
+        attack_rows = [(f"ATK-{i}", "an attack", "3" if i == 1 else "-", "x") for i in range(1, 6 if big else 4)]
+        attack_names = [r[0] for r in attack_rows]
+        files = {"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": attack_doc(0, size_rows=attack_rows),
+                 "DECISIONS.md": DECISIONS_OK, "BUILD-LEDGER.md": LEDGER_OK,
+                 "GO-LIVE.md": golive or golive_ok(["C-SEC-1", *attack_names]),
+                 "OWNERSHIP.md": ownership_doc(explain=EB_OK if explain is None else explain, full=rounds,
+                                               commit={"src": built, "base": base}[hand],
+                                               **(ownership_lines or {}))}
+        if big:
+            files.update({"docs/design.md": "design\n", "docs/plans/p.md": "plan\n", "RESULTS.md": "results\n"})
+        else:
+            files["PLAN.md"] = "tasks\n"
+        if checklist is not None:
+            files["checks/checklist.json"] = checklist
+        if overrides is not None:
+            files["OVERRIDES.md"] = overrides
+        files.update(extra or {})
+        names = sorted(set(files) | {"README.md", "STAGES.md", "ARCHITECTURE.md", "src/app.py", E})
+        parts = [*comps, "REQ-1", *attack_names]
+        tests = [trow(p, *((E,) * 5 if big else (E, E, E if p == "ATK-1" else "", "", ""))) for p in parts]
+        files["ARCHITECTURE.md"] = doc(comps=list(comps), map=names, deps=list(deps), tests=tests, manual=manual)
+        evidence = {0: "file:REQUIREMENTS.md,file:ATTACKS.md",
+                    1: "file:DECISIONS.md" + (",file:docs/design.md" if big else ""),
+                    2: "file:docs/plans/p.md" if big else "file:PLAN.md",
+                    3: f"commit:{built},file:BUILD-LEDGER.md",
+                    4: "file:ARCHITECTURE.md" + (",file:RESULTS.md" if big else ""), 5: stage5,
+                    6: "file:OWNERSHIP.md"}
+        rows = [row(n, "passed", evidence[n]) for n in range(through + 1)]
+        if ship_override:
+            rows[5] = row(5, "overridden", "-", "O1")
+        extra_lines = () if traits_line is None else (f"Traits: {traits_line}",)
+        files["STAGES.md"] = table(*rows, size=size, extra=extra_lines)
+        commit(root, files, "documents")
+        return root
+
+    def run_all(self, root, today=None):
+        return check_project(root, today or self.TODAY)
+
+    def only(self, root, name, today=None):
+        return [p for p in self.run_all(root, today)[0] if p.file == name]
+
+    # ---- a complete project
+    def test_a_complete_project_has_no_problems_and_no_notes(self):
+        self.assertEqual(self.run_all(self.project()), ([], []))
+
+    def test_an_overdue_recheck_is_a_note_and_not_a_problem(self):
+        problems, notes = self.run_all(self.project(), date(2026, 1, 9))
+        self.assertEqual(problems, [])
+        self.assertTrue(any("re-check" in n for n in notes), notes)
+
+    def test_a_recheck_not_yet_due_gives_no_note(self):
+        self.assertEqual(self.run_all(self.project(), date(2026, 1, 7))[1], [])
+
+    def test_a_done_recheck_gives_no_note(self):
+        root = self.project(ownership_lines={"done": "2026-01-08"})
+        self.assertEqual(self.run_all(root, date(2026, 1, 9)), ([], []))
+
+    def test_no_recheck_note_before_stage_6_is_passed(self):
+        root = self.project(through=5)
+        self.assertEqual(self.run_all(root, date(2026, 1, 9))[1], [])
+
+    # ---- the go-live review
+    def test_stage_5_evidence_must_name_go_live_when_rows_are_required(self):
+        root = self.project(stage5="file:OWNERSHIP.md")
+        problems = self.only(root, "STAGES.md")
+        self.assert_mentions(problems, "GO-LIVE.md")
+
+    def test_a_missing_attack_row_is_reported_at_stage_5(self):
+        root = self.project(golive=golive_ok(["C-SEC-1", "ATK-1", "ATK-3"]))
+        self.assert_mentions(self.only(root, "GO-LIVE.md"), "ATK-2")
+
+    def test_an_unresolved_row_is_reported_at_stage_5(self):
+        rows = [("r", "v", i, "proven", "ran x") for i in ("C-SEC-1", "ATK-1", "ATK-2")]
+        root = self.project(golive=gl_rows(*rows, ("r", "v", "ATK-3", "open", "")))
+        self.assert_mentions(self.only(root, "GO-LIVE.md"), "unresolved")
+
+    def test_the_go_live_file_is_not_judged_before_stage_5_is_passed(self):
+        root = self.project(through=4, golive=gl_rows(), checklist=None)
+        self.assertEqual(self.only(root, "GO-LIVE.md"), [])
+        self.assertEqual(self.only(root, "checks/checklist.json"), [])
+        self.assertEqual(self.only(root, "STAGES.md"), [])
+
+    def test_a_missing_checklist_is_a_problem_once_stage_5_is_passed(self):
+        root = self.project(checklist=None)
+        problems = self.only(root, "checks/checklist.json")
+        self.assertEqual([p.line for p in problems], [0])
+        self.assert_mentions(problems, "missing")
+
+    def test_a_malformed_checklist_is_a_problem_not_a_crash(self):
+        for name, text in (("not json", "{oops"), ("not a list", '{"id": "x"}'), ("item without id", '[{"applies_when": []}]'),
+                           ("item without applies_when", '[{"id": "C-1"}]'), ("applies_when not a list",
+                                                                               '[{"id": "C-1", "applies_when": "web"}]'),
+                           ("deep nesting", "[" * 100000), ("not utf-8", None)):
+            with self.subTest(case=name):
+                root = self.project(checklist=text if text is not None else b"[\xff]")
+                self.assertTrue(self.only(root, "checks/checklist.json"))
+
+    def test_a_checklist_with_a_byte_order_mark_and_crlf_is_fine(self):
+        text = BOM + json.dumps([CHECKLIST_ALWAYS, CHECKLIST_LLM], indent=2).replace("\n", "\r\n")
+        self.assertEqual(self.only(self.project(checklist=text), "checks/checklist.json"), [])
+
+    def test_a_declared_trait_adds_its_checklist_rows(self):
+        root = self.project(traits_line="web")
+        self.assert_mentions(self.only(root, "GO-LIVE.md"), "C-WEB-1")
+
+    def test_a_detected_trait_adds_its_checklist_rows(self):
+        root = self.project(extra={"requirements.txt": "anthropic==1.0\n"}, deps=["anthropic 1.0"])
+        self.assert_mentions(self.only(root, "GO-LIVE.md"), "C-LLM-1")
+
+    def test_a_trait_with_a_row_in_the_go_live_file_passes(self):
+        ids = ["C-SEC-1", "C-LLM-1", "ATK-1", "ATK-2", "ATK-3"]
+        root = self.project(extra={"requirements.txt": "anthropic==1.0\n"}, deps=["anthropic 1.0"],
+                            golive=golive_ok(ids))
+        self.assertEqual(self.only(root, "GO-LIVE.md"), [])
+
+    def test_an_unreadable_manifest_needs_a_traits_line_at_stage_5(self):
+        root = self.project(extra={"go.mod": "module x\n"})
+        self.assert_mentions(self.only(root, "STAGES.md"), "Traits")
+        fixed = self.project(extra={"go.mod": "module x\n"}, traits_line="none")
+        self.assertFalse(any("Traits" in m for m in messages(self.only(fixed, "STAGES.md"))))
+
+    def test_manual_manifests_need_a_traits_line_at_stage_5(self):
+        root = self.project(manual="build scripts are vendored")
+        self.assert_mentions(self.only(root, "STAGES.md"), "Traits")
+        fixed = self.project(manual="build scripts are vendored", traits_line="none")
+        self.assertFalse(any("Traits" in m for m in messages(self.only(fixed, "STAGES.md"))))
+
+    def test_stage_5_passed_with_ownership_file_missing_is_reported_without_a_crash(self):
+        root = self.project()
+        git(root, "rm", "-q", "--", "OWNERSHIP.md")
+        problems = self.run_all(root)[0]
+        self.assertTrue(any("OWNERSHIP.md" in m for m in messages(problems)), problems)
+
+    # ---- the explain-back
+    def test_an_open_explain_back_gap_blocks_stage_5(self):
+        rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="did not know", status="open")]
+        self.assert_mentions(self.only(self.project(explain=rows), "OWNERSHIP.md"), "gap")
+
+    def test_a_missing_explain_back_topic_blocks_stage_5(self):
+        self.assert_mentions(self.only(self.project(explain=EB_OK[:2]), "OWNERSHIP.md"), "how-to-recover")
+
+    def test_the_explain_back_is_not_judged_before_stage_5(self):
+        root = self.project(through=4, explain=[])
+        self.assertEqual(self.only(root, "OWNERSHIP.md"), [])
+
+    def test_an_overridden_ship_stage_skips_the_explain_back_and_go_live(self):
+        overrides = overrides_doc(entry(1, stage="5 Ship", reconfirmed="2026-01-02"))
+        rows = [eb_row("what-it-does", status="open", gap="unsure")]
+        root = self.project(ship_override=True, overrides=overrides, explain=rows, golive=gl_rows(), checklist=None)
+        self.assertEqual(self.run_all(root), ([], ["open override O1 (stage 5 Ship): see OVERRIDES.md"]))
+
+    def test_an_overridden_ship_stage_still_needs_the_override_reconfirmed(self):
+        overrides = overrides_doc(entry(1, stage="5 Ship"))
+        root = self.project(ship_override=True, overrides=overrides, golive=gl_rows(), checklist=None)
+        self.assert_mentions(self.only(root, "OVERRIDES.md"), "O1")
+
+    # ---- the full round
+    def test_the_full_round_binds_at_stage_6_and_not_before(self):
+        self.assertEqual(self.only(self.project(through=5, rounds=[]), "OWNERSHIP.md"), [])
+        self.assertTrue(self.only(self.project(through=6, rounds=[]), "OWNERSHIP.md"))
+
+    def test_too_few_full_round_answers_are_reported_at_stage_6(self):
+        self.assert_mentions(self.only(self.project(rounds=fr_rows(2)), "OWNERSHIP.md"), "at least 3")
+
+    def test_a_hand_change_that_touches_no_source_is_reported_at_stage_6(self):
+        self.assert_mentions(self.only(self.project(hand="base"), "OWNERSHIP.md"), "source file")
+
+    def test_a_complete_full_project_has_no_problems(self):
+        self.assertEqual(self.run_all(self.project(size="full", rounds=fr_rows(3)))[0], [])
+
+    def test_a_full_project_needs_one_answer_per_component(self):
+        comps = ("Parser", "Store", "Exporter", "Reader")
+        short = self.project(size="full", comps=comps, rounds=fr_rows(3))
+        self.assert_mentions(self.only(short, "OWNERSHIP.md"), "at least 4")
+        enough = self.project(size="full", comps=comps, rounds=fr_rows(4))
+        self.assertEqual(self.only(enough, "OWNERSHIP.md"), [])
+
+    def test_a_small_project_does_not_scale_with_components(self):
+        root = self.project(comps=("Parser", "Store", "Exporter", "Reader"), rounds=fr_rows(3))
+        self.assertEqual(self.only(root, "OWNERSHIP.md"), [])
+
+    # ---- the size rule
+    def test_small_with_a_dockerfile_is_refused_through_check_project(self):
+        root = self.make_repo({"STAGES.md": table(), "Dockerfile": "FROM base\n"})
+        self.assert_mentions(self.only(root, "STAGES.md"), "Dockerfile")
+
+    def test_full_with_a_dockerfile_is_not_refused(self):
+        root = self.make_repo({"STAGES.md": table(size="full"), "Dockerfile": "FROM base\n"})
+        self.assertEqual(self.only(root, "STAGES.md"), [])
+
+    def test_small_with_a_detected_llm_dependency_is_refused(self):
+        root = self.make_repo({"STAGES.md": table(), "requirements.txt": "anthropic==1.0\n"})
+        self.assert_mentions(self.only(root, "STAGES.md"), "llm")
+
+    def test_small_with_a_declared_personal_data_trait_is_refused(self):
+        root = self.make_repo({"STAGES.md": table(extra=("Traits: personal-data",))})
+        self.assert_mentions(self.only(root, "STAGES.md"), "personal-data")
+
+    def test_small_with_eleven_tracked_source_files_is_refused(self):
+        files = {"STAGES.md": table(), **{f"src/f{i}.py": "x = 1\n" for i in range(11)}}
+        self.assert_mentions(self.only(self.make_repo(files), "STAGES.md"), "10")
+
+
+class GoLiveCommand(GitCase):
+    def repo(self, checklist=True):
+        files = {"STAGES.md": table(size="full", extra=("Traits: personal-data",)), "ATTACKS.md": THREE_ATTACKS,
+                 "requirements.txt": "anthropic==1.0\n", "Dockerfile": "FROM base\n"}
+        if checklist:
+            files["checks/checklist.json"] = CHECKLIST_OK
+        return self.make_repo(files)
+
+    def test_it_prints_the_traits_and_the_required_ids_and_exits_0(self):
+        code, out, _ = run_main(["--go-live", str(self.repo())])
+        self.assertEqual(code, 0)
+        self.assertIn("traits: container, llm, paid-api, personal-data", out.splitlines())
+        for needle in ("C-SEC-1", "C-LLM-1", "ATK-1", "ATK-2", "ATK-3"):
+            self.assertIn(needle, out.split())
+        self.assertNotIn("C-WEB-1", out)
+
+    def test_the_folder_may_come_before_the_flag(self):
+        self.assertEqual(run_main([str(self.repo()), "--go-live"])[0], 0)
+
+    def test_it_exits_0_although_the_project_has_problems(self):
+        root = self.make_repo({"STAGES.md": table(row(0, "passed"), size="full"), "ATTACKS.md": THREE_ATTACKS})
+        self.assertTrue(check_project(root)[0])
+        self.assertEqual(run_main(["--go-live", str(root)])[0], 0)
+
+    def test_without_a_checklist_it_lists_the_attacks_and_says_so_on_stderr(self):
+        code, out, err = run_main(["--go-live", str(self.repo(checklist=False))])
+        self.assertEqual(code, 0)
+        self.assertIn("ATK-1", out.split())
+        self.assertNotIn("C-SEC-1", out)
+        self.assertIn("checklist", err)
+
+    def test_no_traits_prints_none(self):
+        root = self.make_repo({"STAGES.md": table(), "a.py": "x = 1\n"})
+        code, out, _ = run_main(["--go-live", str(root)])
+        self.assertEqual(code, 0)
+        self.assertIn("traits: none", out.splitlines())
+
+    def test_not_a_directory_or_too_many_arguments_exit_2(self):
+        self.assertEqual(run_main(["--go-live", str(ROOT / "nope-folder")])[0], 2)
+        self.assertEqual(run_main(["--go-live", "a", "b"])[0], 2)
+
+    def test_not_a_git_repository_exits_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(run_main(["--go-live", tmp])[0], 2)
 
 
 # --------------------------------------------------------------------- command

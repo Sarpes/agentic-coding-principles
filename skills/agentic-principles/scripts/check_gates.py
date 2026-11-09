@@ -1,6 +1,7 @@
 """Stage gate: checks that each stage marked done in STAGES.md has the evidence its gate needs.
 
-Usage: python check_gates.py [project folder]   (default: the current directory)
+Usage: python check_gates.py [--go-live] [project folder]   (default: the current directory)
+--go-live prints the detected traits and the ids GO-LIVE.md must cover, and exits 0.
 Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 the folder cannot be checked
 (more than one argument, not a directory, not the top of a git repository, or a shallow clone).
 Line numbers are 1-based lines of the original file; 0 means the problem concerns the whole file.
@@ -17,6 +18,9 @@ Layout (one file on purpose, so it can be copied alone; search for the section b
   stage checks      stage_problems: evidence, ordering, overrides, adoption
   OVERRIDES.md      parse_overrides and override_problems
   architecture      file map, dependency table, test table and attack list checks, manifest readers, their timing
+  traits and go-live  trait detection, the Small size check, the checklist file, GO-LIVE.md rows
+  OWNERSHIP.md      explain-back (stage 5), full round, hand-changed commit and re-check (stage 6)
+  stage wiring      go_live_ownership_problems: which of the above binds at which stage
   command          check_project and main
 """
 from __future__ import annotations
@@ -29,7 +33,7 @@ import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import NamedTuple
 
@@ -76,6 +80,7 @@ class Row(NamedTuple):
 @dataclass
 class Stages:
     size: str | None = None
+    size_line: int = 0
     method: str | None = None
     adopted_at: int | None = None
     adopted_at_line: int = 0
@@ -233,6 +238,7 @@ def parse_stages(text: str) -> Stages:
             continue
         seen.add(label)
         if label == "Size":
+            stages.size_line = number
             if value in SIZES:
                 stages.size = value
             else:
@@ -1116,6 +1122,407 @@ def architecture_problems(root, tracked, stages, overrides) -> list[Problem]:
     return problems
 
 
+# ------------------------------------------------------ traits, size and go-live
+
+class TraitRule(NamedTuple):
+    """What shows a trait: file name patterns (matched on the lower-cased base name), folder names, dependencies."""
+    files: tuple[str, ...] = ()
+    folders: tuple[str, ...] = ()
+    deps: tuple[str, ...] = ()
+
+
+CONTAINER_FILES = ("dockerfile", "dockerfile.*", "*.dockerfile", "compose*.y*ml", "docker-compose*.y*ml")
+LLM_DEPS = ("anthropic", "openai", "langchain", "litellm", "@anthropic-ai/sdk")
+# Design section 9: the trait rules as data. `paid-api` also follows from every llm dependency.
+TRAIT_RULES: dict[str, TraitRule] = {
+    "container": TraitRule(files=CONTAINER_FILES),
+    "database": TraitRule(files=("*.sql",), folders=("migrations",),
+                          deps=("psycopg", "psycopg2-binary", "asyncpg", "sqlalchemy", "prisma", "pg", "mysql2")),
+    "web": TraitRule(deps=("flask", "fastapi", "django", "streamlit", "express", "next")),
+    "llm": TraitRule(deps=LLM_DEPS),
+    "paid-api": TraitRule(deps=("stripe", "twilio", *LLM_DEPS)),
+    "scheduled": TraitRule(files=("crontab",), deps=("celery", "apscheduler")),
+}
+SMALL_SOURCE_LIMIT = 10
+SMALL_REFUSED_TRAITS = ("llm", "paid-api", "personal-data", "web")    # personal-data can only be declared
+GO_LIVE_FILE = "GO-LIVE.md"
+CHECKLIST_FILE = "checks/checklist.json"
+GO_LIVE_COLUMNS = ["Risk", "Validation", "Source", "Status", "Evidence"]
+GO_LIVE_STATUSES = ("proven", "not applicable", "overridden")
+
+
+def _tracked_matching(tracked, patterns) -> list[str]:
+    return [rel for rel in tracked
+            if "node_modules" not in rel.split("/")[:-1]
+            and any(fnmatch.fnmatchcase(rel.split("/")[-1].lower(), p) for p in patterns)]
+
+
+def detect_traits(root, tracked, deps) -> set[str]:
+    """Traits shown by the tracked files and the direct dependencies. `root` is part of the signature only."""
+    names = {_dep_key(name) for name in deps}
+    found = set()
+    for trait, rule in TRAIT_RULES.items():
+        in_folder = any(f in rel.lower().split("/")[:-1] and "node_modules" not in rel.split("/")[:-1]
+                        for rel in tracked for f in rule.folders)
+        if names & {_dep_key(d) for d in rule.deps} or _tracked_matching(tracked, rule.files) or in_folder:
+            found.add(trait)
+    return found
+
+
+def size_problems(stages, tracked, traits, file: str = STAGES_FILE) -> list[Problem]:
+    """`Size: small` is refused for a project that is too large for it, so Small cannot be used to escape."""
+    if stages.size != "small":
+        return []
+    line = stages.size_line
+    problems = [Problem(file, line, f"Size: small is refused: {rel} is tracked, and a container means the project "
+                                    "is not small; use 'Size: full'")
+                for rel in _tracked_matching(tracked, CONTAINER_FILES)]
+    count = len([rel for rel in tracked if rel.lower().endswith(SOURCE_EXTENSIONS)])
+    if count > SMALL_SOURCE_LIMIT:
+        problems.append(Problem(file, line, f"Size: small is refused: {count} tracked source files; a small "
+                                            f"project has at most {SMALL_SOURCE_LIMIT}; use 'Size: full'"))
+    problems += [Problem(file, line, f"Size: small is refused: the project has the '{trait}' trait; "
+                                     "use 'Size: full'")
+                 for trait in sorted(set(traits) & set(SMALL_REFUSED_TRAITS))]
+    return problems
+
+
+def traits_line_problems(stages, unreadable, manual: bool, file: str = STAGES_FILE) -> list[Problem]:
+    """With a manifest this check cannot read, traits cannot be detected, so the owner must state them."""
+    if stages.traits is not None or not (unreadable or manual):
+        return []
+    why = ("a manifest this check cannot read (" + ", ".join(unreadable) + ")") if unreadable \
+        else "dependencies listed by hand (Manifests: manual)"
+    return [Problem(file, 0, f"no 'Traits:' line, but the project has {why}, so traits cannot be detected; write "
+                             "'Traits: none' or list them (for example 'Traits: web, personal-data')")]
+
+
+def required_go_live_ids(traits, checklist: list[dict], attacks: set[str]) -> set[str]:
+    """Every attack id, and every checklist item that applies always or to one of the traits."""
+    required = set(attacks)
+    for item in checklist:
+        applies = set(item.get("applies_when") or ())
+        if "always" in applies or applies & set(traits):
+            required.add(item["id"])
+    return required
+
+
+def load_checklist(root):
+    """(items, problems) from checks/checklist.json: a list of {"id": str, "applies_when": [str]}."""
+    path = Path(root) / CHECKLIST_FILE
+    if not path.is_file():
+        return [], [Problem(CHECKLIST_FILE, 0, "file is missing; the go-live review needs the checklist "
+                                                "(copy it into the project)")]
+    text, problem = decode(path.read_bytes(), CHECKLIST_FILE)
+    if problem:
+        return [], [problem]
+    try:
+        data = json.loads(normalise(text))
+    except (ValueError, RecursionError) as error:
+        return [], [Problem(CHECKLIST_FILE, getattr(error, "lineno", 0) or 0, f"not valid JSON: {error}")]
+    if not isinstance(data, list):
+        return [], [Problem(CHECKLIST_FILE, 0, "must be a JSON list of items {\"id\": ..., \"applies_when\": [...]}")]
+    items, problems, seen = [], [], set()
+    for position, item in enumerate(data, start=1):
+        ident = item.get("id") if isinstance(item, dict) else None
+        applies = item.get("applies_when") if isinstance(item, dict) else None
+        if not (isinstance(ident, str) and ident.strip()):
+            problems.append(Problem(CHECKLIST_FILE, 0, f"item {position} has no text 'id'"))
+        elif not (isinstance(applies, list) and all(isinstance(a, str) for a in applies)):
+            problems.append(Problem(CHECKLIST_FILE, 0, f"item {ident} needs 'applies_when' as a list of text"))
+        elif ident in seen:
+            problems.append(Problem(CHECKLIST_FILE, 0, f"item id {ident} appears twice"))
+        else:
+            seen.add(ident)
+            items.append({"id": ident, "applies_when": [a.strip().lower() for a in applies]})
+    return items, problems
+
+
+def manual_manifests(architecture_text: str) -> bool:
+    """True when ARCHITECTURE.md carries 'Manifests: manual: <reason>' in its Dependencies section."""
+    section = _section(architecture_text, "Dependencies")
+    return bool(section) and any(re.fullmatch(r"Manifests:[ \t]*manual:[ \t]*\S.*", line) for _, line in section[1])
+
+
+def _blank(value: str) -> bool:
+    return not value.strip() or bool(PLACEHOLDER.fullmatch(value.strip()))
+
+
+def go_live_problems(text, required: set[str], overrides, file: str = GO_LIVE_FILE) -> list[Problem]:
+    """One resolved row for each required id; a Source cell holds exactly one id or free text."""
+    rows, errors = _table(0, list(enumerate(clean_lines(text), start=1)), GO_LIVE_COLUMNS)
+    problems = [Problem(file, n, m) for n, m in errors]
+    if not rows and not errors:
+        problems.append(Problem(file, 0, "no rows; every required id needs a row"))
+    first_row: dict[str, int] = {}
+    for number, cells in rows:
+        risk, validation, source, status, evidence = cells
+        label = source.strip("` ") or "a row"
+        if any(EXAMPLE_MARKER in cell for cell in cells):
+            problems.append(Problem(file, number, f"still contains the template marker {EXAMPLE_MARKER}; "
+                                                  "replace the worked example"))
+        for name, value in (("Risk", risk), ("Validation", validation), ("Source", source)):
+            if not value.strip():
+                problems.append(Problem(file, number, f"{label}: '{name}' is blank"))
+        named = sorted({t.strip("`.") for t in re.split(r"[\s,;]+", source)
+                        if t.strip("`.") in required or ATK_ID.fullmatch(t.strip("`."))})
+        if len(named) > 1:
+            problems.append(Problem(file, number, f"'{source}' names more than one id ({', '.join(named)}); "
+                                                  "one id per row"))
+        if label in required:
+            if label in first_row:
+                problems.append(Problem(file, number, f"{label} has more than one row (first at line "
+                                                      f"{first_row[label]})"))
+            else:
+                first_row[label] = number
+        problems += _go_live_status_problems(number, label, status, evidence, overrides, file)
+    problems += [Problem(file, 0, f"{ident} has no row; add one whose Source is exactly {ident}")
+                 for ident in sorted(required - set(first_row))]
+    return problems
+
+
+def _go_live_status_problems(number, label, status, evidence, overrides, file) -> list[Problem]:
+    state = status.strip().casefold()
+    if state == "proven":
+        if _blank(evidence):
+            return [Problem(file, number, f"{label}: proven but has no evidence; write the command and its result")]
+    elif state == "not applicable":
+        if _blank(evidence):
+            return [Problem(file, number, f"{label}: not applicable but gives no reason; write the reason")]
+    elif state == "overridden":
+        ident = evidence.strip()
+        if not re.fullmatch(r"O\d+", ident):
+            return [Problem(file, number, f"{label}: overridden, but Evidence does not name an override "
+                                          "(for example O1)")]
+        return _overridden([(number, f"Override: {ident}")], overrides, "5", file, label)[1]
+    else:
+        return [Problem(file, number, f"{label}: unresolved (status '{status}'); it must be one of: "
+                                      + ", ".join(GO_LIVE_STATUSES))]
+    return []
+
+
+# ----------------------------------------------------------------- OWNERSHIP.md
+
+OWNERSHIP_FILE = "OWNERSHIP.md"
+TOPICS = ("what-it-does", "how-it-breaks", "how-to-recover")
+EXPLAIN_COLUMNS = ["Topic", "Question", "Answer", "Gap", "Status"]
+ROUND_COLUMNS = ["Question", "Answer", "Gap", "Status"]
+OWNERSHIP_LINES = ("Hand-changed commit", "Closed", "Re-check due", "Re-check done", "Graded by")
+OWNERSHIP_LINE = re.compile(r"^(" + "|".join(OWNERSHIP_LINES) + r"):[ \t]*(.*?)[ \t]*$")
+MIN_ROUND = 3
+RECHECK_DAYS = 7
+
+
+def _ownership_lines(text: str) -> dict[str, tuple[str, int]]:
+    """{label: (value, line)} for the first of each labelled line outside comments and code fences."""
+    found: dict[str, tuple[str, int]] = {}
+    for number, line in enumerate(clean_lines(text), start=1):
+        m = OWNERSHIP_LINE.match(line)
+        if m and m.group(1) not in found:
+            found[m.group(1)] = (m.group(2), number)
+    return found
+
+
+def _answer_rows_problems(rows, question_at, answer_at, gap_at, status_at, label_of, file):
+    """(answered count, problems) for the rows of an explain-back or full-round table."""
+    answered, problems = 0, []
+    for number, cells in rows:
+        label = label_of(cells)
+        if any(EXAMPLE_MARKER in cell for cell in cells):
+            problems.append(Problem(file, number, f"{label}: still contains the template marker {EXAMPLE_MARKER}; "
+                                                  "replace the worked example"))
+        if not cells[question_at].strip():
+            problems.append(Problem(file, number, f"{label}: Question is blank"))
+        if _blank(cells[answer_at]):
+            problems.append(Problem(file, number, f"{label}: the answer is blank; the owner's words go here"))
+        else:
+            answered += 1
+        if not cells[gap_at].strip():
+            problems.append(Problem(file, number, f"{label}: Gap is blank; the grading session writes the gap, "
+                                                  "or '-' when there is none"))
+        state = cells[status_at].strip().casefold()
+        if state not in ("open", "closed"):
+            problems.append(Problem(file, number, f"{label}: Status '{cells[status_at]}' must be open or closed"))
+        elif state == "open":
+            problems.append(Problem(file, number, f"{label}: the gap is still open ({cells[gap_at].strip() or '-'}); "
+                                                  "close it or log an override"))
+    return answered, problems
+
+
+def explain_back_problems(text, overrides, file: str = OWNERSHIP_FILE) -> list[Problem]:
+    """Stage 5: one answered, closed row for each of the three topics."""
+    section = _section(text, "Explain-back")
+    if section is None:
+        return [Problem(file, 0, "no '## Explain-back' section")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, "5", file, "Explain-back")
+    if silenced:
+        return []
+    rows, errors = _table(head, body, EXPLAIN_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    _, found = _answer_rows_problems(rows, 1, 2, 3, 4, lambda cells: cells[0].strip("` ") or "a row", file)
+    problems += found
+    topics = {cells[0].strip("` ") for _, cells in rows}
+    problems += [Problem(file, number, f"'{cells[0]}' is not a topic; use one of: {', '.join(TOPICS)}")
+                 for number, cells in rows if cells[0].strip("` ") not in TOPICS]
+    if not errors:
+        problems += [Problem(file, head, f"no row for the topic {topic}") for topic in TOPICS if topic not in topics]
+    return problems
+
+
+def ownership_problems(text, root, tracked, size, components: int, overrides,
+                       file: str = OWNERSHIP_FILE) -> list[Problem]:
+    """Stage 6: the full round, the hand-changed commit, the grader and the re-check dates.
+
+    `tracked` is part of the signature only; the hand-changed commit is judged from history."""
+    problems = _full_round_problems(text, size, components, overrides, file)
+    lines = _ownership_lines(text)
+    for label in OWNERSHIP_LINES:
+        if label not in lines:
+            problems.append(Problem(file, 0, f"missing the line '{label}: ...'"))
+    if "Hand-changed commit" in lines:
+        value, number = lines["Hand-changed commit"]
+        problems += _hand_change_problems(Path(root), value, number, file)
+    if "Graded by" in lines and _blank(lines["Graded by"][0]):
+        problems.append(Problem(file, lines["Graded by"][1], "Graded by is empty; name the separate session that "
+                                                             "compared the answers with the code"))
+    problems += _recheck_date_problems(lines, file)
+    return problems
+
+
+def _full_round_problems(text, size, components: int, overrides, file) -> list[Problem]:
+    section = _section(text, "Full round")
+    if section is None:
+        return [Problem(file, 0, "no '## Full round' section")]
+    head, body = section
+    silenced, problems = _overridden(body, overrides, "6", file, "Full round")
+    if silenced:
+        return []
+    rows, errors = _table(head, body, ROUND_COLUMNS)
+    problems += [Problem(file, n, m) for n, m in errors]
+    answered, found = _answer_rows_problems(rows, 0, 1, 2, 3, lambda cells: cells[0].strip() or "a row", file)
+    problems += found
+    needed = max(MIN_ROUND, components) if size == "full" else MIN_ROUND
+    if not errors and answered < needed:
+        problems.append(Problem(file, head, f"{answered} answered questions; a {size or 'small'} project needs at "
+                                            f"least {needed}"))
+    return problems
+
+
+def _hand_change_problems(root: Path, value: str, number: int, file: str) -> list[Problem]:
+    if not re.fullmatch("[0-9a-f]{7,40}", value):
+        return [Problem(file, number, f"Hand-changed commit '{value}' is not a hexadecimal hash (7 to 40 "
+                                      "characters from 0-9 and a-f)")]
+    resolved = resolve_commit(root, value)
+    if not (resolved and is_ancestor(root, resolved, "HEAD")):
+        return [Problem(file, number, f"Hand-changed commit {value} is not in the history of the current branch")]
+    changed = (git_text(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", resolved) or "")
+    if not any(name.lower().endswith(SOURCE_EXTENSIONS) for name in changed.split("\n")):
+        return [Problem(file, number, f"Hand-changed commit {value} touches no source file; it must be the "
+                                      "commit where the owner changed code by hand")]
+    return []
+
+
+def _recheck_date_problems(lines, file) -> list[Problem]:
+    problems = []
+    for label in ("Closed", "Re-check due"):
+        if label in lines and not _is_date(lines[label][0]):
+            problems.append(Problem(file, lines[label][1], f"{label} '{lines[label][0]}' must be a date like "
+                                                           "2026-11-09"))
+    if "Re-check done" in lines and lines["Re-check done"][0] != "-" and not _is_date(lines["Re-check done"][0]):
+        problems.append(Problem(file, lines["Re-check done"][1], f"Re-check done '{lines['Re-check done'][0]}' must "
+                                                                  "be '-' or a date like 2026-11-09"))
+    if all(label in lines and _is_date(lines[label][0]) for label in ("Closed", "Re-check due")):
+        closed = date.fromisoformat(lines["Closed"][0])
+        if date.fromisoformat(lines["Re-check due"][0]) != closed + timedelta(days=RECHECK_DAYS):
+            problems.append(Problem(file, lines["Re-check due"][1], f"Re-check due must be exactly {RECHECK_DAYS} "
+                                    f"days after Closed ({closed + timedelta(days=RECHECK_DAYS)})"))
+    return problems
+
+
+def recheck_note(text, today: date) -> str | None:
+    """A reminder (never a failure) when the re-check date has come and the re-check is not recorded as done."""
+    lines = _ownership_lines(text)
+    due, done = lines.get("Re-check due"), lines.get("Re-check done")
+    if due is None or not _is_date(due[0]) or (done is not None and _is_date(done[0])):
+        return None
+    if today < date.fromisoformat(due[0]):
+        return None
+    return (f"re-check was due {due[0]} and is not recorded as done: ask the owner the {OWNERSHIP_FILE} questions "
+            "again before other work, then fill in 'Re-check done'")
+
+
+# ---------------------------------------------------------------- stage wiring
+
+def _project_traits(root: Path, tracked, stages):
+    """(traits, unreadable manifests): detected traits plus the traits declared in STAGES.md."""
+    deps, unreadable = manifest_dependencies(root, tracked)
+    return detect_traits(root, tracked, deps) | (stages.traits or set()), unreadable
+
+
+def go_live_ownership_problems(root, tracked, stages, overrides, today: date):
+    """(problems, notes): the size rule always; go-live and explain-back at 5 passed; the full round at 6 passed."""
+    if stages is None:
+        return [], []
+    root = Path(root)
+    traits, unreadable = _project_traits(root, tracked, stages)
+    problems = size_problems(stages, tracked, traits)
+    notes: list[str] = []
+
+    def passed(n: int) -> bool:
+        return n in stages.rows and stages.rows[n].status == "passed"
+
+    architecture, _ = _load(root, ARCHITECTURE_FILE)
+    ownership, found = _load(root, OWNERSHIP_FILE)
+    if passed(5):
+        problems += traits_line_problems(stages, unreadable, manual_manifests(architecture or ""))
+        problems += _go_live_stage_problems(root, tracked, stages, overrides, traits)
+        if ownership is not None:
+            problems += explain_back_problems(ownership, overrides)
+    if passed(6) and ownership is not None:
+        problems += ownership_problems(ownership, root, tracked, stages.size, len(components(architecture or "")),
+                                       overrides)
+        note = recheck_note(ownership, today)
+        if note:
+            notes.append(note)
+    return problems + (found if passed(5) or passed(6) else []), notes
+
+
+def _go_live_stage_problems(root, tracked, stages, overrides, traits) -> list[Problem]:
+    checklist, problems = load_checklist(root)
+    attacks, _ = _load(root, ATTACKS_FILE)
+    required = required_go_live_ids(traits, checklist, attack_ids(attacks or ""))
+    if not required:
+        return problems
+    row = stages.rows[5]
+    named = [norm_path(v) for k, v in parse_evidence(row.evidence)[0] if k == "file"]
+    if GO_LIVE_FILE not in named:
+        problems.append(Problem(STAGES_FILE, row.line, f"{row.name}: the evidence must include "
+                                                       f"'file:{GO_LIVE_FILE}'"))
+    text, found = _load(root, GO_LIVE_FILE)
+    problems += found
+    if text is not None:
+        problems += go_live_problems(text, required, overrides)
+    return problems
+
+
+def go_live_report(root: Path) -> tuple[list[str], list[str]]:
+    """(stdout lines, stderr lines) of `--go-live`: the traits and the ids GO-LIVE.md must cover."""
+    require_checkable_repo(root)
+    tracked = tracked_files(root)
+    stages_text, _ = _load(root, STAGES_FILE)
+    stages = parse_stages(stages_text or "")
+    traits, _ = _project_traits(root, tracked, stages)
+    checklist, found = load_checklist(root)
+    attacks, _ = _load(root, ATTACKS_FILE)
+    required = required_go_live_ids(traits, checklist, attack_ids(attacks or ""))
+    natural = lambda ident: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", ident)]   # noqa: E731
+    out = ["traits: " + (", ".join(sorted(traits)) or "none"), f"required ids ({len(required)}):"]
+    out += [f"  {ident}" for ident in sorted(required, key=natural)]
+    err = [f"{p.file}: {p.message}; only the attack ids are listed" for p in found]
+    return out, err
+
+
 # --------------------------------------------------------------------- command
 
 def _load(root: Path, name: str):
@@ -1128,7 +1535,7 @@ def _load(root: Path, name: str):
 
 
 def check_project(root, today: date | None = None) -> tuple[list[Problem], list[str]]:
-    """(problems, notes) for a project folder. `today` is reserved for the date-based checks of later versions."""
+    """(problems, notes) for a project folder. `today` (default: the current date) only decides the re-check note."""
     root = Path(root)
     require_checkable_repo(root)
     tracked = tracked_files(root)
@@ -1149,6 +1556,9 @@ def check_project(root, today: date | None = None) -> tuple[list[Problem], list[
     if overrides_text is not None or not found:
         problems += override_problems(overrides_text, root, stages, OVERRIDES_FILE)
     problems += architecture_problems(root, tracked, stages, overrides)
+    found, more = go_live_ownership_problems(root, tracked, stages, overrides, today or date.today())
+    problems += found
+    notes += more
     notes += [f"open override {ident} (stage {o.stage}): see {OVERRIDES_FILE}"
               for ident, o in overrides.items() if o.status == "open"]
     problems = sorted(set(problems), key=lambda p: (p.file, p.line, p.message))   # one report per problem
@@ -1158,14 +1568,22 @@ def check_project(root, today: date | None = None) -> tuple[list[Problem], list[
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     print(TRUST_LIMIT, file=sys.stderr)
+    go_live = "--go-live" in args
+    args = [a for a in args if a != "--go-live"]
     if len(args) > 1:
-        print("usage: check_gates.py [project folder]", file=sys.stderr)
+        print("usage: check_gates.py [--go-live] [project folder]", file=sys.stderr)
         return 2
     root = Path(args[0]) if args else Path.cwd()
     if not root.is_dir():
         print(f"check_gates.py: not a directory: {root}", file=sys.stderr)
         return 2
     try:
+        if go_live:
+            out, err = go_live_report(root)
+            print("\n".join(out))
+            for line in err:
+                print(f"note: {line}", file=sys.stderr)
+            return 0
         problems, notes = check_project(root)
     except GateError as error:
         print(f"check_gates.py: {error}", file=sys.stderr)
