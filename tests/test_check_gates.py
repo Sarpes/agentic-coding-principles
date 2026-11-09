@@ -32,6 +32,7 @@ from check_gates import (  # noqa: E402
     explain_back_problems,
     file_map_problems,
     go_live_problems,
+    grilling_problems,
     main,
     manifest_dependencies,
     override_problems,
@@ -110,6 +111,19 @@ def messages(problems):
 REQ_OK = "# Requirements\n\n| ID | Requirement |\n|---|---|\n| REQ-1 | The tool works |\n"
 ATTACKS_OK = "# Attacks\n\n- ATK-1 feed it garbage\n"
 DECISIONS_OK = "# Decisions\n\n### D1. Pick a store\n\n- **Context:** text\n"
+
+
+def grill_section(heading, rows=3, by="mattpocock-skills:grilling", answer="Only the shop owner uses it.",
+                  outcome="kept as it is"):
+    lines = [f"## {heading}", "", f"Grilled with: {by}", "",
+             "| Challenge | Owner's answer | Outcome |", "|---|---|---|"]
+    lines += [f"| Challenge {i}? | {answer} | {outcome} |" for i in range(1, rows + 1)]
+    return "\n".join(lines) + "\n"
+
+
+GRILL_OK = "# Grilling\n\n" + grill_section("Intake") + "\n" + grill_section("Design")
+EV0 = "file:REQUIREMENTS.md,file:ATTACKS.md,file:GRILLING.md"
+EV1 = "file:DECISIONS.md,file:GRILLING.md"
 LEDGER_OK = ("# Build ledger\n\n## Reviews\n\n| Task | Reviewer | Result |\n|---|---|---|\n"
              "| 1 | fresh session | approved |\n")
 LEDGER_NO_ROWS = "# Build ledger\n\n## Reviews\n\n| Task | Reviewer | Result |\n|---|---|---|\n"
@@ -590,8 +604,36 @@ class EvidenceRules(GitCase):
         self.assert_mentions(self.run_check(root, 1, "full", "file:DECISIONS.md,file:docs/plans/p.md"), "design")
 
     def test_stage_1_full_with_design_passes(self):
-        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n"})
-        self.assertEqual(self.run_check(root, 1, "full", "file:DECISIONS.md,file:docs/design.md"), [])
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n", "GRILLING.md": GRILL_OK})
+        self.assertEqual(self.run_check(root, 1, "full", EV1 + ",file:docs/design.md"), [])
+
+    # ---- grilling: on every project, Small and Full, at stage 0 and stage 1
+    def test_grilling_is_required_at_stages_0_and_1_on_both_sizes(self):
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "DECISIONS.md": DECISIONS_OK,
+                               "docs/design.md": "design\n"})
+        for stage, evidence in ((0, "file:REQUIREMENTS.md,file:ATTACKS.md"), (1, "file:DECISIONS.md")):
+            for size in ("small", "full"):
+                with self.subTest(stage=stage, size=size):
+                    extra = ",file:docs/design.md" if (stage, size) == (1, "full") else ""
+                    self.assert_mentions(self.run_check(root, stage, size, evidence + extra), "GRILLING.md")
+
+    def test_grilling_passes_at_stage_0_and_1_when_recorded(self):
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "DECISIONS.md": DECISIONS_OK,
+                               "GRILLING.md": GRILL_OK})
+        self.assertEqual(self.run_check(root, 0, "small", EV0), [])
+        self.assertEqual(self.run_check(root, 1, "small", EV1), [])
+
+    def test_stage_0_judges_only_the_intake_section(self):
+        text = "# Grilling\n\n" + grill_section("Intake")
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "DECISIONS.md": DECISIONS_OK,
+                               "GRILLING.md": text})
+        self.assertEqual(self.run_check(root, 0, "small", EV0), [])
+        self.assert_mentions(self.run_check(root, 1, "small", EV1), "Design")
+
+    def test_too_few_grilling_rows_fail_on_small_too(self):
+        text = "# Grilling\n\n" + grill_section("Intake", rows=2)
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "GRILLING.md": text})
+        self.assert_mentions(self.run_check(root, 0, "small", EV0), "at least 3")
 
     def test_stage_2_full_plan_outside_docs_plans_fires(self):
         root = self.make_repo({"docs/plan.md": "plan\n"})
@@ -2044,6 +2086,62 @@ class OwnershipRules(GitCase):
 
     def test_garbage_never_raises(self):
         for text in ("", "## Full round\n", "\x00|||\n", "Graded by:" * 400, "## Full round\n\n" + "| a |\n" * 500):
+            with self.subTest(size=len(text)):
+                self.check(text)
+
+
+class GrillingRules(unittest.TestCase):
+    """GRILLING.md: the owner grilled on the requirements (Intake) and the design (Design), on every project."""
+
+    def check(self, text, section="Intake"):
+        return grilling_problems(text, section)
+
+    def test_a_complete_section_passes(self):
+        self.assertEqual(self.check(GRILL_OK, "Intake"), [])
+        self.assertEqual(self.check(GRILL_OK, "Design"), [])
+
+    def test_a_missing_section_is_named(self):
+        self.assertTrue(any("Design" in m for m in self.check("# Grilling\n\n" + grill_section("Intake"), "Design")))
+
+    def test_two_rows_are_not_enough(self):
+        self.assertTrue(any("at least 3" in m for m in self.check("# G\n\n" + grill_section("Intake", rows=2))))
+
+    def test_three_rows_are_enough(self):
+        self.assertEqual(self.check("# G\n\n" + grill_section("Intake", rows=3)), [])
+
+    def test_a_blank_answer_fires_and_does_not_count(self):
+        problems = self.check("# G\n\n" + grill_section("Intake", answer=""))
+        self.assertTrue(any("answer" in m for m in problems), problems)
+        self.assertTrue(any("at least 3" in m for m in problems), problems)
+
+    def test_a_placeholder_answer_fires(self):
+        self.assertTrue(any("answer" in m for m in self.check("# G\n\n" + grill_section("Intake", answer="TBD"))))
+
+    def test_a_blank_outcome_fires(self):
+        self.assertTrue(any("Outcome" in m for m in self.check("# G\n\n" + grill_section("Intake", outcome=""))))
+
+    def test_the_grilled_with_line_must_be_filled(self):
+        for by in ("", "-"):
+            with self.subTest(by=by):
+                self.assertTrue(any("Grilled with" in m
+                                    for m in self.check("# G\n\n" + grill_section("Intake", by=by))))
+        missing = "# G\n\n" + grill_section("Intake").replace("Grilled with: mattpocock-skills:grilling\n", "")
+        self.assertTrue(any("Grilled with" in m for m in self.check(missing)))
+
+    def test_the_fallback_counts_as_a_method(self):
+        self.assertEqual(self.check("# G\n\n" + grill_section("Intake", by="fallback: written challenges")), [])
+
+    def test_a_grilled_with_line_in_the_other_section_does_not_count(self):
+        text = "# G\n\n" + grill_section("Intake").replace("Grilled with: mattpocock-skills:grilling\n", "") + \
+               "\n" + grill_section("Design")
+        self.assertTrue(any("Grilled with" in m for m in self.check(text, "Intake")))
+
+    def test_wrong_columns_fire(self):
+        text = "# G\n\n## Intake\n\nGrilled with: x\n\n| Q | A |\n|---|---|\n| a | b |\n"
+        self.assertTrue(self.check(text))
+
+    def test_garbage_never_raises(self):
+        for text in ("", "## Intake\n", "## Intake\n|||\n", "\x00" * 50, "## Intake\n\n" + "| a |\n" * 300):
             with self.subTest(size=len(text)):
                 self.check(text)
 
