@@ -90,7 +90,7 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Why:** 3.11 is the oldest supported version (see Assumptions) and 3.13 the newest in use; Windows is a common developer system and the one where line endings and path separators differ. The workflow only reads the code, so a read-only token is enough, and no secret is configured.
 - **Rejected:** (a) a single job, because it would miss Windows line-ending and path problems; (c) macOS and the middle version, because they add jobs without a failure mode that the two chosen systems do not already cover.
 - **Cost / trade-off:** Four jobs run per push, and a problem specific to macOS or to Python 3.12 would not be caught. One test (the private-name scan) is skipped in CI because it needs a local environment variable.
-- **What would make you change it:** A user report of a failure on macOS or on another Python version adds that cell to the matrix.
+- **What would make you change it:** A user report of a failure on macOS or on another Python version adds that cell to the matrix. Superseded in part by D21, which added macOS before any such report.
 
 ### D10. No argument means the current directory
 
@@ -201,6 +201,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Rejected:** (a), because nothing enforced it and a single commit weakened the Stage 3 rule without any message; (b), because a one-commit restart is a modification, not an add; (d), because content such as an all-open table also appears legitimately in the middle of a cycle.
 - **Cost / trade-off:** Every `STAGES.md` needs one more line, and existing files without it now fail until `Cycle: 1` is added. The owner can still reuse or lower a number by hand: reusing a number makes the gate measure from the older start, which is the stricter reading, but nothing stops it.
 - **What would make you change it:** A project where several cycles run at once on different branches, because one number per file could no longer say which start applies.
+
+### D21. macOS joins the CI matrix, superseding D9's rejection of it
+
+- **Context:** D9 rejected macOS because it added jobs without a failure mode the other two systems did not cover. The design for the skill (section 3) then promised that the scripts run on Windows, macOS and Linux, and its section 11 says continuous integration adds macOS to keep that promise. A promise that no job exercises is a claim without evidence.
+- **Options considered:** (a) keep D9 and change the design to promise Windows and Linux only; (b) add macos-latest to the existing matrix, so each Python version runs on three systems; (c) run macOS on one Python version only.
+- **Chosen:** (b), six jobs: Python 3.11 and 3.13 on ubuntu-latest, windows-latest and macos-latest.
+- **Why:** The gate and the scripts call `git` and compare paths, and macOS differs from Linux in the default file system (case-insensitive) and in the shell tools that ship with the system, so it can fail where Linux passes. The design is binding, and the matrix is the only place the promise is tested.
+- **Rejected:** (a), because users on macOS exist and the promise costs one matrix entry to keep; (c), because it leaves one Python version on macOS unchecked and saves little, as each job takes minutes.
+- **Cost / trade-off:** Six jobs per push instead of four; macOS runners use more of a plan's minutes than Linux ones on some plans. The first run on macOS may expose failures that are not yet known, and those would need fixes before the branch merges.
+- **What would make you change it:** A macOS job that is slow or flaky for a reason outside this code, for example a runner image change, would justify moving macOS to a scheduled run instead of every push.
 
 ## Assumptions
 
