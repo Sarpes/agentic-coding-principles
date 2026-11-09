@@ -182,6 +182,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** A wrong file map is not reported until stage 5, so an owner who keeps the document current is not warned earlier. Manifests the script cannot read (Poetry, `Pipfile`, `go.mod` and others) force a manual line, so those projects get a weaker dependency check; a manifest the script cannot read is reported and never skipped. Duplicate problems from two checks are reported once.
 - **What would make you change it:** A real project where a stale map at stage 4 caused a wrong decision would justify checking the map from stage 4.
 
+### D19. Six primary sources for the engineering checklist, each read before its item
+
+- **Context:** D16 allows checklist items without an incident as long as each cites a recognised source. Without a fixed set of sources, items would cite blog posts or nothing more than the agent's memory, and the owner cannot judge which is which.
+- **Options considered:** (a) any source the writer finds convincing; (b) one source only, such as the OWASP Top 10; (c) a fixed set of six primary documents, each covering a different part: OWASP Top 10:2025, OWASP ASVS 5.0.0, OWASP Top 10 for LLM Applications 2025, NIST SP 800-218 (SSDF 1.1), the Google SRE book and the Twelve-Factor App, with every item citing the exact page it was taken from.
+- **Chosen:** (c). The 40 items in `checklist/` cite those pages, and `build_checklist.py` refuses an item whose source has no `https://` address or no name.
+- **Why:** Together the six cover security, dependencies, operations, data and AI systems, they are maintained by recognised bodies, and each page was fetched and read while its item was written, so a reader can open the same page and check the claim.
+- **Rejected:** (a), because a source nobody vetted gives the owner no way to tell a recognised practice from an opinion; (b), because the OWASP Top 10 says nothing about retries, backups, rollback or model cost.
+- **Cost / trade-off:** Contract testing and mutation testing, which the design names, appear in none of the six, so they have no item yet. Sources change edition (the OWASP Top 10 moved from 2021 to 2025 during this work), so cited pages need re-reading when a new edition appears. The builder checks that an address is present, not that the page says what the item claims; that rests on the reviewer opening the page.
+- **What would make you change it:** A needed practice that none of the six describes, such as contract testing, would justify adding a seventh primary source with its own decision entry.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
@@ -194,6 +204,7 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - Skill packaging: later, by the owner's choice.
 - Tempo modes for short events: deferred, not needed for v0.1.
 - Installer: copying the templates is enough for v0.1.
+- Checklist items for contract testing and mutation testing: none of the six chosen sources describes them (D19).
 - Write a requirements matrix on day one: candidate principle awaiting a real incident (the requirement check that came late still passed).
 - Keep a glossary of domain terms and a diagram of how the parts talk: candidate principle awaiting a real incident.
 - Compute dates and rules in deterministic code, not in a language model: candidate principle awaiting a real incident (only a benefit is recorded).

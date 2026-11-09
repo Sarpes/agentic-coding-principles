@@ -137,3 +137,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The first real run listed `anthropic-skills:deep-research` as missing although the session lists it; that skill does not come from the plugin cache, so the checker cannot see it. The report is therefore a prompt to compare with the session's own skill list, as the design already says.
+
+### 18. Engineering checklist and its builder (2026-11-09)
+
+- **Prompt (or summary of it):** Write the engineering checklist of design section 8: items in plain words, each citing a page of one of six named primary sources read while the item is written, plus a builder that checks every item and generates `checklist/checklist.json` for the go-live review, test-first against a stub.
+- **What the AI produced:** 42 tests (25 failing and 7 erroring against the stub) in a first commit, then 40 items in six area files, a README with the item format, traits and sources, and `build_checklist.py`, which takes its trait names from `check_gates.py` and refuses blank fields, sources without an `https://` address, unknown traits, unmapped companions and numbering gaps.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first drafts cited the NIST landing page although the text had been read from the PDF, and gave Google SRE book chapter numbers and a full chapter title that came from memory, not from the pages fetched. Both were found while checking each citation against the pages read, and replaced with the PDF address and the chapter names as fetched.
