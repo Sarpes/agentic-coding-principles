@@ -2,7 +2,18 @@
 
 [![CI](https://github.com/Sarpes/agentic-coding-principles/actions/workflows/ci.yml/badge.svg)](https://github.com/Sarpes/agentic-coding-principles/actions/workflows/ci.yml)
 
-Rules, stage gates, templates and a tested documentation gate for building software with an AI coding agent. Every rule comes from a lesson in projects built so far: a rule without a real incident behind it is not added. A project moves through eight stages, and each stage ends at a gate, the evidence that must exist before the next stage starts. The repository holds 20 principles, eight templates, and a checker (`checks/check_docs.py`) that fails when a decision log, an AI log or a requirements table is incomplete.
+Rules, stage gates, templates, a tested documentation gate, and a skill that conducts a project through all of them, for building software with an AI coding agent.
+
+## What this is, and who it is for
+
+It is written for people who build software with an AI coding agent and are not software engineers by training. The danger for that reader is "vibe coding": accepting whatever the agent produces because it seems to run, and moving so fast that nobody can later explain what was built. This repository answers with a process:
+
+- A project moves through eight stages. Each stage ends at a **gate**: the evidence that must exist before the next stage starts.
+- Every rule in `principles/` comes from a lesson in projects built so far. The repository holds 20 principles, each with a real incident behind it. A second layer, `checklist/`, holds engineering practices a newcomer may never have met; each item cites a recognised source (for example OWASP, the Open Worldwide Application Security Project, or NIST, the US National Institute of Standards and Technology).
+- A **skill** (a packaged set of instructions an AI coding agent loads for a kind of task) called `agentic-principles` walks the agent through the stages, calls other installed skills at the right moment, and refuses to call a stage done without evidence.
+- Scripts check what can be checked by code: a decision log or a requirements table with a blank field fails the build.
+
+The aim, in the owner's words: every part is tested to its limits, and a month later the owner can explain the architecture, each file, the tech stack, how each part was tested and every third-party dependency, without the agent.
 
 ## The eight stages
 
@@ -19,32 +30,94 @@ Rules, stage gates, templates and a tested documentation gate for building softw
 
 The index, with the four-part format of a principle and the kinds of enforcement, is in [principles/README.md](principles/README.md).
 
-## Use it in a new project
+## Install and start a project
 
-1. Copy the files you need from [templates/](templates/) into the new repository, and copy `checks/check_docs.py` (the gate) too, so that step 3 works there.
-2. Keep `DECISIONS.md` and `AI-Agents.md` at the repository root; fill every field, and replace the worked example entries with real ones.
-3. Run the documentation gate: `python checks/check_docs.py .` (Python 3.11 or newer, standard library only). Exit code 0 means no problems; 1 lists them.
-4. Add the same command as a step in your CI workflow, as in [.github/workflows/ci.yml](.github/workflows/ci.yml), so an incomplete log fails the build.
-5. Work through the stages in order and close each one at its gate, using the principles file of that stage as the checklist.
+**As a plugin** (the usual route). In Claude Code, add this repository as a marketplace and install the plugin:
+
+```
+/plugin marketplace add Sarpes/agentic-coding-principles
+/plugin install agentic-principles@agentic-principles
+```
+
+**Clone and link.** Clone the repository, then link the folder `skills/agentic-principles` into your skills folder (`~/.claude/skills/`), so the skill appears as `agentic-principles`. The skill finds the principles, checklist and templates in the clone; `init_project.py --where` prints where it found them.
+
+**Start a project.** Open the agent in the project folder and ask it to run the project under the agentic principles. It recommends a size and a build method; you choose both:
+
+- **Small**: one script or module, no live users, no personal data, no paid calls. The gate refuses "Small" for a project with a container file, more than 10 tracked source files, or a web, LLM, paid-API or personal-data trait.
+- **Full**: everything else.
+- **Build method**: *normal* (one session works through the plan, with one independent review at the end) or *sub-agent* (a sub-agent is a separate AI session given one job: a writer and a separate reviewer per task).
+
+The skill then runs `init_project.py`, which copies the templates and the gate scripts into the project, writes a marked block into the project's `CLAUDE.md` (so the skill is loaded in every later session) and adds the checks to the project's continuous integration. Without the agent, the same checks run as `python checks/check_gates.py` and `python checks/check_docs.py .` (Python 3.11 or newer, standard library only; exit code 0 means no problems, 1 lists them).
+
+An existing project can be adopted at whatever stage it has really reached. Earlier stages are marked `adopted`, which means "not done under this skill", never "passed".
+
+## What a run looks like
+
+At the opening of each stage the agent says in plain words what the stage is for, what evidence will close it, and which overrides are still open. Then the work happens:
+
+1. **Intake.** You state acceptance criteria (`REQ-1`, `REQ-2`, ...). A separate session plays the attacker and drafts an attack list (`ATK-n`: how could this be broken or misused?); you read it and add to it.
+2. **Design and plan.** Questions come before code. Decisions are logged with the options rejected. Every task gets a definition of done.
+3. **Build.** A failing test comes first, then the code, then an independent review. The suite runs after every merge.
+4. **Verify.** Each part climbs the test ladder below. A real end-to-end run happens early.
+5. **Ship.** Before release you answer, in your own words, what the project does, how it can break and how to recover (the *explain-back*). A go-live review lists the risks the project's traits imply, and every row needs evidence.
+6. **Own.** Closed-book, you explain the project and change one module by hand; a separate session grades the answers. A gap keeps the stage open, and a re-check follows within a week.
+7. **Retro.** Every "where the AI was wrong" entry becomes a rule, a template change or a recorded "won't fix".
+
+A stage is `passed` only when `check_gates.py` accepts its evidence. You may skip a gate through an **override**: a recorded choice, with your reason and the risk you accept, kept forever in `OVERRIDES.md` and re-confirmed before release. Nobody can mark a stage passed when its evidence is absent.
+
+## The test ladder
+
+"Tested to its limits" means each part climbs five rungs. A rung that cannot apply is marked not applicable, with a reason.
+
+1. **Written first.** A test failed before the code existed.
+2. **Proven to catch breakage.** Removing the behaviour turns a test red (mutation testing, or by hand on a throwaway copy). Green tests alone are not evidence.
+3. **Whole input range.** Generated inputs, boundary values and hostile inputs chosen to break it.
+4. **Real integration.** A start from a clean clone using only the documented commands, and an end-to-end run with the real services.
+5. **Deliberate failure.** Kill a process, break a key, cut the network, feed corrupt data; the system recovers or fails visibly with a reason.
+
+## Limits, stated openly
+
+The scripts and the skill have limits, and a green result must not be read as more than it is.
+
+- **The scripts verify that evidence exists, not that a person really approved or wrote it.** A named file is present, a named commit is real, a table row is filled. The owner and the agent share one git identity, so the scripts cannot tell who approved something. Approvals rest on trust until a tool-call hook (a rule that blocks the agent's action) exists; it is planned for a later version. `check_gates.py` prints this limit on every run.
+- **Two things cannot be fully scripted:** proving that a test failed before its code existed, and judging the quality of written prose.
+- **The companion report is a hint.** `check_companions.py` reads the plugin cache and can miss skills that live elsewhere; the session's own skill list wins.
+- **Mutation testing's tool may be unavailable.** The plugin needs a tool that may not be installed, so rung 2 is usually done by hand on a throwaway copy, and the skill says so.
+- **A companion that needs the Workflow tool may not run in every session.** It then counts as missing, and its fallback is used and recorded.
+- **Automatic loading is proven only once the skill is installed.** The tests check the skill's files and that its instructions hold under pressure; whether an agent loads it on its own can only be seen in a real installed session.
+
+## Works with these skills
+
+The skill is a conductor: it decides which installed skill runs when, and adds gates, evidence and plain-language guidance around it. It does not copy or restate their instructions; credit for the techniques belongs to their authors, named here by plugin only. Every one is optional. When a plugin is missing or switched off, the skill says so, uses the fallback named in `skills/agentic-principles/companions.json` and records the fact as evidence for that stage; it never silently skips the step.
+
+Install a plugin with `/plugin install <plugin>@<marketplace>` after adding its marketplace with `/plugin marketplace add <source>`.
+
+| Plugin | What it does here | Stage |
+|---|---|---|
+| `repo-kickoff` | Local skill for starting a repository and for auditing that its documents match its code | 0, 5 |
+| `superpowers` | Brainstorming, writing plans, the sub-agent and normal build methods, test-first loop, answering review, verification before claims, finishing a branch | 1 to 5 |
+| `mattpocock-skills` | Research, stress-testing a design, glossary, module boundaries, prototypes, test placement, hard-bug diagnosis, branch review | 0 to 5 |
+| `andrej-karpathy-skills` | Agent habits: state assumptions, keep it simple, change only what is needed | 1 to 3 |
+| `anthropic-skills` | Deep research across sources, for facts that need primary documents | 0 |
+| `property-based-testing` | Generated inputs over the whole input range (rung 3) | 4 |
+| `mutation-testing` | Proves tests catch breakage (rung 2); see the limit above | 4 |
+| `pr-review-toolkit` | Agents that hunt silent failures and gaps in tests | 4 |
+| `deepeval` | Evaluating the output of a language model, for projects that use one | 4 |
+| `example-skills` | Browser-app testing, for projects with a web interface | 4 |
+| `differential-review` | Security-focused review of what changed | 5 |
+| `insecure-defaults` | Finds insecure default settings | 5 |
+| `spec-to-code-compliance` | Checks documents against the code | 5 |
+| `supply-chain-risk-auditor` | Audits dependencies for supply-chain risk | 5 |
+| `audit-context-building` | Prepares the agent to read an existing codebase, for adoption | 6 |
+| `claude-md-management` | Updates the agent's project instructions after the retro | 7 |
+
+Most of these come from the official plugin marketplace; `andrej-karpathy-skills` has its own marketplace, and `property-based-testing`, `mutation-testing`, `differential-review`, `insecure-defaults`, `spec-to-code-compliance`, `supply-chain-risk-auditor` and `audit-context-building` come from the Trail of Bits skills marketplace. `anthropic-skills` ships with the Claude app. Built-in commands the skill also uses (running the app, a security review) need no install.
 
 ## How it is tested
 
-`python -m unittest -v` runs the tests in [tests/](tests/): the checker's functions, the templates (the three gated ones must pass the gate) and the principles (four fields each, contiguous ids, every id in the index, an incident for every rule). GitHub Actions runs the tests and then the gate on this repository, on Python 3.11 and 3.13, on Ubuntu and Windows.
+`python -m unittest -v` runs the tests in [tests/](tests/): the documentation checker, the stage-gate script, the project setup script, the companion mapping, the checklist, the templates, the principles and this README. GitHub Actions runs the tests and then the gate on this repository, on Python 3.11 and 3.13, on Ubuntu and Windows.
 
-The gate can fail. `test_cli_exit_1_on_broken_repo` in [tests/test_check_docs.py](tests/test_check_docs.py) builds a broken repository in a temporary directory at run time, runs the command-line tool on it and expects exit code 1; it runs in every CI job. No broken file is stored in the repository. The pre-commit secret gate in [.githooks/](.githooks/) is tested the same way: `tests/test_secret_gate.py` builds a temporary git repository, stages a key-like line made at run time and expects `git commit` to fail; it skips with a visible reason when git or a working Python is missing. One test that scans for private names is skipped in CI because it needs a local environment variable; this is expected.
-
-## Layout
-
-| Path | Content |
-|---|---|
-| `principles/` | The eight stage files and the index |
-| `templates/` | Eight templates, each with one worked example |
-| `checks/check_docs.py` | The documentation gate |
-| `tests/` | Unit tests for the gate, templates, principles and the secret gate |
-| `.githooks/` | Pre-commit secret gate; after cloning, enable it with `git config core.hooksPath .githooks` |
-| `docs/design.md` | The design this repository was built from |
-| `DECISIONS.md`, `AI-Agents.md` | This repository's own decision log and AI log |
-| `.github/workflows/ci.yml` | The CI workflow |
+Every check has a case that must fire and a look-alike that must not. The gate can fail: `test_cli_exit_1_on_broken_repo` in [tests/test_check_docs.py](tests/test_check_docs.py) builds a broken repository in a temporary directory at run time and expects exit code 1. The pre-commit secret gate in [.githooks/](.githooks/) is tested the same way with a temporary git repository and a key-like line made at run time. A test compares the plugins named in this README with `companions.json`, so the two cannot drift apart. One test that scans for private names is skipped in CI because it needs a local environment variable; this is expected.
 
 ## Licence
 

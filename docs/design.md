@@ -25,7 +25,7 @@ Non-goals (v0.1): a tool-call guard hook (the owner's own tool-call hook, not pu
 
 Anti-goals (a failure even if it works):
 - A long list of principles nobody applies.
-- Rules without a stated incident ("best practices" invented to look complete).
+- Rules without a stated incident ("best practices" invented to look complete). Narrowed to principles: the engineering checklist cites a recognised source instead of an incident (D16).
 - Anything tied to the owner's machine (paths, private projects) or naming or describing a specific project, company or case; incidents read as "lessons from projects built so far".
 - A gate that only reads well: every check must have a test that makes it fire.
 

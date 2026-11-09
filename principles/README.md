@@ -16,7 +16,7 @@ A project built with an AI coding agent moves through eight stages. Each stage e
 | CI | A test that runs on every push and pull request fails when the rule is broken. |
 | human gate | A person answers the "How to check" question before the stage closes. |
 | pre-commit hook | `.githooks/pre-commit` refuses the commit that breaks the rule, once it is enabled with `git config core.hooksPath .githooks`. |
-| contract hook (planned, v0.2) | A hook that refuses the tool call breaking the rule. Not public yet; until then the rule rests on the other kinds named with it. |
+| contract hook (planned) | A hook that refuses the tool call breaking the rule. Not public yet; until then the rule rests on the other kinds named with it. |
 
 ## Index
 

@@ -4,6 +4,15 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `skills/agentic-principles/`: a skill that conducts a project through the eight stages (router, one file per stage), with `companions.json` mapping capabilities to installed skills, `init_project.py`, `check_gates.py`, `check_companions.py` and `build_checklist.py`.
+- `.claude-plugin/`: plugin and marketplace manifests.
+- `checklist/`: 40 engineering checklist items, each citing a recognised source, and the generated `checklist.json`.
+- `templates/`: STAGES, OVERRIDES, ATTACKS, ARCHITECTURE, GO-LIVE and OWNERSHIP templates, and a continuous integration workflow for projects.
+- `README.md`: rewritten as a front page, with the limits stated openly and a section on the skills this one works with.
+- `principles/`: the enforcement kind "contract hook (planned, v0.2)" is now "contract hook (planned)".
+- `tests/test_readme.py`: the README must name exactly the plugins in `companions.json`.
+- `docs/design.md`: the anti-goal about rules without an incident is marked as narrowed to principles (D16).
+
 ## [0.1.1] - 2026-11-08
 
 - `checks/check_docs.py`: a file that is not valid UTF-8 is reported at the line of the bad byte instead of crashing the gate.

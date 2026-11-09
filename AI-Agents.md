@@ -185,3 +185,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The previous round changed the Stage 5 line to match the gate, although the design outranks the code; the review ruled the other way, so the gate changed and the line went back. The template still carried the acceptance test's expected findings until the previous round's report named them.
+
+### 24. README, framework updates and release preparation (2026-11-09)
+
+- **Prompt (or summary of it):** Rewrite the README as a front page for a reader who is not an engineer, state the known limits openly, add a section on the skills this one works with, rename the planned-hook enforcement kind, and update the layout, changelog and decision log, test-first.
+- **What the AI produced:** A test file with a helper that compares the plugins in the mapping with the README section (9 failures and 2 errors on the real files in the first commit, helper cases passing), then the README, the renamed kind in the index, one principle and its test, the changelog list under "Unreleased", the layout and commands in the instructions file, and the two edits to the decision log and the design.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first commit attempt was refused by the secret gate because no working Python was on the path in that shell; I fixed the path and did not bypass the gate. The README table could not carry backticks on any word that is not a plugin, because the test reads every backticked name in that section as a plugin; the test caught this when I drafted the section.
