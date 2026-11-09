@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "A Claude Code skill that conducts a software project through eight stages with evidence-based gates, for owners who build with AI agents without engineering training",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "agentic-engineering-principles",
       "source": "./",
       "description": "Conduct a project through intake, design, plan, build, verify, ship, own and retro: installed skills are called at the right stage, a stage closes only on evidence that a script checks or on an override the owner chose, and the owner proves in a closed-book round that they can explain the result.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "Sarp Esenyel"
       },

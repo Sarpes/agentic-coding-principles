@@ -42,7 +42,7 @@ from datetime import date, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 STAGE_NAMES = ("0 Intake", "1 Design", "2 Plan", "3 Build", "4 Verify", "5 Ship", "6 Own", "7 Retro")
 STATUSES = ("open", "passed", "overridden", "adopted", "reopened")

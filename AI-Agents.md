@@ -249,3 +249,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The owner's ruling as given: the same minimum of 3 answered challenges on Small and Full, at both stages.
 - **What I changed or rejected, and why:** The AI had proposed grilling at Stage 1 for every project and at Stage 0 only for the requirements; the owner made both stages mandatory for every project. The bundle plugin and install commands were deferred by the owner and saved as a plan.
 - **Where the AI was wrong, and how I noticed:** The test helper that fills a template line demanded exactly one empty line, but the grilling template has two (one per section); the walk test failed on it and the helper now fills a chosen one. Adding the new section names to the robustness test's vocabulary changed its random documents and exposed an older crash: a NUL in a commit value from `STAGES.md` reached `git` and raised. It is fixed in the shared git helper, with its own test.
+
+### 32. Releasing 0.3.0 (2026-11-10)
+
+- **Prompt (or summary of it):** Merge all six pull requests, then release 0.3.0.
+- **What the AI produced:** The merges in dependency order (repo-kickoff first, then the private record, the install plan, the grilling gate, then the private handover), the grilling branch brought up to date with `main` and its conflicts resolved (grilling renumbered to D27 and entry 31). For the release: tests asking for a dated 0.3.0 section and version 0.3.0 in both manifests and in `check_gates.py`, watched failing, then the version raised and the Unreleased list moved under 0.3.0. The tag and the GitHub release follow once CI on `main` is green.
+- **What I kept:** One release for both breaking changes, as the owner decided, with what an existing project must do written at the top of the 0.3.0 section.
+- **What I changed or rejected, and why:** None: the owner asked for the release as planned.
+- **Where the AI was wrong, and how I noticed:** No new error in this step.
