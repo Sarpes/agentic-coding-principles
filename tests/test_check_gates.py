@@ -2405,5 +2405,219 @@ class ShippedTemplates(unittest.TestCase):
             self.assertEqual(override_problems(text, tmp, parse_stages(self.read("STAGES.md"))), [])
 
 
+# ------------------------------------------------------------ closing survivors of the rule-removal run (RESULTS.md)
+# Each test below was written because removing one rule from a copy of the gate left every earlier test green.
+
+class TextHelperRules(unittest.TestCase):
+    def test_a_comment_keeps_its_line_breaks_so_line_numbers_stay_true(self):
+        self.assertEqual(check_gates.clean_lines("a <!-- x\ny\nz --> b\nc"), ["a ", "", " b", "c"])
+
+    def test_dash_dash_dash_is_not_a_comment_opener_with_a_closer(self):
+        self.assertEqual(check_gates.clean_lines("a <!--->\nb"), ["a <!--->", "b"])
+
+    def test_a_short_opener_is_not_a_comment(self):
+        self.assertEqual(check_gates.clean_lines("<!- x -->"), ["<!- x -->"])
+
+    def test_an_unclosed_comment_is_left_in_place(self):
+        self.assertEqual(check_gates.clean_lines("a <!-- open\nb"), ["a <!-- open", "b"])
+
+    def test_a_fenced_block_is_blanked(self):
+        self.assertEqual(check_gates.clean_lines("```py\nx\n```\ny"), ["", "", "", "y"])
+
+    def test_a_shorter_fence_does_not_close_a_longer_one(self):
+        text = "````\ncode\n```\nstill code\n````\nafter"
+        self.assertEqual(check_gates.clean_lines(text), ["", "", "", "", "", "after"])
+
+    def test_a_closing_fence_carries_no_text(self):
+        text = "```\ncode\n``` not a closer\nmore\n```\nafter"
+        self.assertEqual(check_gates.clean_lines(text), ["", "", "", "", "", "after"])
+
+    def test_split_row_drops_the_outer_pipes_and_trims(self):
+        self.assertEqual(check_gates.split_row("| a | b |"), ["a", "b"])
+
+    def test_split_row_keeps_an_escaped_pipe_inside_a_cell(self):
+        self.assertEqual(check_gates.split_row("| a \\| b | c |"), ["a \\| b", "c"])
+
+    def test_split_row_does_not_treat_a_final_escaped_pipe_as_a_border(self):
+        self.assertEqual(check_gates.split_row("| a | b \\|"), ["a", "b \\|"])
+
+    def test_alignment_rows_need_a_dash_in_every_cell(self):
+        self.assertTrue(check_gates.is_alignment_row(["---", ":-:", "--:"]))
+        self.assertFalse(check_gates.is_alignment_row([""]))
+        self.assertFalse(check_gates.is_alignment_row(["::"]))
+        self.assertFalse(check_gates.is_alignment_row(["---", "text"]))
+
+    def test_section_lines_stop_at_a_level_two_heading(self):
+        self.assertEqual(check_gates.section_lines("## A\nx\n## B\ny", "A"), ["x"])
+        self.assertEqual(check_gates.section_lines("## A\nx\n# T\ny", "A"), ["x"])
+        self.assertEqual(check_gates.section_lines("## A\nx\n### sub\ny", "A"), ["x", "### sub", "y"])
+
+    def test_is_date_accepts_only_the_dashed_iso_form(self):
+        self.assertTrue(check_gates._is_date("2026-11-09"))
+        self.assertFalse(check_gates._is_date("20261109"))
+        self.assertFalse(check_gates._is_date("2026-W45-1"))
+        self.assertFalse(check_gates._is_date("2026-13-45"))
+
+
+class EvidenceCellRules(GitCase):
+    def test_a_file_item_with_no_path_is_an_error(self):
+        for cell in ("file:", "file:   ", "commit:"):
+            items, errors = check_gates.parse_evidence(cell)
+            self.assertEqual((items, len(errors)), ([], 1), cell)
+
+    def test_a_dash_or_blank_cell_holds_no_items_and_no_errors(self):
+        for cell in ("-", "", "  -  "):
+            self.assertEqual(check_gates.parse_evidence(cell), ([], []), repr(cell))
+
+    def test_a_missing_file_reads_as_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(check_gates.read_evidence_file(Path(tmp), "nope.md"))
+
+    def test_a_passed_stage_with_no_evidence_says_so(self):
+        root = self.make_repo()
+        text = table(row(2, "passed", "-"))
+        self.assert_mentions(stage_problems(text, root, ls(root), {}), "names no evidence")
+
+    def test_a_build_row_without_a_commit_names_the_missing_commit(self):
+        root = self.make_repo({"BUILD-LEDGER.md": LEDGER_OK})
+        text = table(row(3, "passed", "file:BUILD-LEDGER.md"))
+        self.assert_mentions(stage_problems(text, root, ls(root), {}), "'commit:<hash>'")
+
+    def test_a_build_row_before_stages_md_is_committed_says_so(self):
+        root = self.make_repo({"BUILD-LEDGER.md": LEDGER_OK})
+        text = table(row(3, "passed", f"commit:{git(root, 'rev-parse', 'HEAD')},file:BUILD-LEDGER.md"))
+        self.assert_mentions(stage_problems(text, root, ls(root), {}), "not committed yet")
+
+    def test_wrong_stage_table_columns_are_named(self):
+        text = ("Size: small\nMethod: normal\nCycle: 1\n\n| Name | State | Proof | Override |\n|---|---|---|---|\n"
+                "| 0 Intake | open | - | - |\n")
+        self.assertTrue(any("columns must be exactly" in m for _, m in parse_stages(text).errors))
+
+    def test_a_reviews_table_with_the_wrong_columns_is_refused(self):
+        text = "# L\n\n## Reviews\n\n| A | B | C |\n|---|---|---|\n| 1 | x | y |\n"
+        self.assertTrue(any("columns" in m for m in check_gates.ledger_problems(text)))
+
+
+class OverrideSurvivorRules(GitCase):
+    def test_the_last_duplicate_field_wins(self):
+        text = "### O1. t\n\n- **Status:** open\n- **Status:** closed\n"
+        self.assertEqual(parse_overrides(text)["O1"].status, "closed")
+
+    def test_a_blank_field_is_called_empty(self):
+        root = self.make_repo()
+        stages = parse_stages(STAGES_OPEN)
+        for given in ({"why": ""}, {"closing": ""}):
+            problems = override_problems(overrides_doc(entry(1, **given)), root, stages)
+            self.assertTrue(any(" is empty" in m for m in messages(problems)), (given, problems))
+
+    def test_an_entry_removed_by_a_merge_is_still_reported_as_vanished(self):
+        """git log hides a side branch whose change the merge discarded unless --full-history is given."""
+        root = self.make_repo({"OVERRIDES.md": overrides_doc(entry(1))})
+        git(root, "switch", "-q", "-c", "side")
+        commit(root, {"OVERRIDES.md": overrides_doc(entry(1), entry(2))}, "adds O2")
+        git(root, "switch", "-q", "-")
+        commit(root, {"other.txt": "x\n"}, "unrelated work")
+        git(root, "merge", "-q", "-s", "ours", "-m", "merge that drops O2", "side")
+        problems = override_problems(overrides_doc(entry(1)), root, parse_stages(STAGES_OPEN))
+        self.assert_mentions(problems, "O2 vanished")
+
+
+class WiringSurvivorRules(GitCase):
+    def test_an_invalid_size_does_not_start_the_attack_count(self):
+        """With no usable size the size error is the one reported; the architecture checks wait for it."""
+        root = self.make_repo({"ATTACKS.md": attack_doc(1)})
+        stages = parse_stages(table(row(0, "passed", "file:ATTACKS.md"), size="huge"))
+        self.assertIsNone(stages.size)
+        self.assertEqual(check_gates.architecture_problems(root, ls(root), stages, {}), [])
+
+    def test_a_go_live_status_is_read_without_regard_to_case(self):
+        for status in ("Proven", "PROVEN", "Not Applicable"):
+            self.assertEqual(go_live_problems(gl_rows(("r", "v", "C-SEC-1", status, "ran x: 0 hits")), {"C-SEC-1"}, {}),
+                             [], status)
+
+    def test_an_override_line_must_start_its_line(self):
+        self.assertFalse(section_override("see Override: O1 for details", {"O1": ov("open", "4 Verify")}, "4"))
+        self.assertTrue(section_override("Override: O1", {"O1": ov("open", "4 Verify")}, "4"))
+
+    def test_a_heading_with_extra_words_is_not_the_section(self):
+        self.assertIsNone(check_gates._section("## File mapping\n| a |\n", "File map"))
+        self.assertIsNotNone(check_gates._section("## File map  \n| a |\n", "File map"))
+
+    def test_the_first_of_a_repeated_ownership_line_wins(self):
+        lines = check_gates._ownership_lines("Closed: 2026-01-01\nClosed: 2026-02-02\n")
+        self.assertEqual(lines["Closed"], ("2026-01-01", 1))
+
+    def test_a_hand_changed_commit_must_be_a_hash_and_not_a_name(self):
+        root = self.make_repo({"src/app.py": "x = 1\n"})
+        problems = check_gates._hand_change_problems(root, "HEAD", 3, "OWNERSHIP.md")
+        self.assertTrue(any("hexadecimal" in p.message for p in problems), problems)
+        self.assertEqual(check_gates._hand_change_problems(root, git(root, "rev-parse", "HEAD"), 3, "OWNERSHIP.md"), [])
+
+    def test_a_trait_with_nothing_to_cover_asks_for_no_go_live_file(self):
+        """No checklist items and no attacks means no required ids, so stage 5 need not cite GO-LIVE.md."""
+        root = self.make_repo({"checks/checklist.json": "[]"})
+        stages = parse_stages(table(row(5, "passed", "file:OWNERSHIP.md")))
+        self.assertEqual(check_gates._go_live_stage_problems(root, ls(root), stages, {}, {"web"}), [])
+
+    def test_the_report_lists_ids_in_natural_order(self):
+        items = [{"id": "C-SEC-10", "applies_when": ["always"]}, {"id": "C-SEC-2", "applies_when": ["always"]}]
+        root = self.make_repo({"STAGES.md": table(size="full"), "checks/checklist.json": json.dumps(items)})
+        out, _ = check_gates.go_live_report(root)
+        self.assertEqual([line.strip() for line in out[2:]], ["C-SEC-2", "C-SEC-10"])
+
+    def test_an_unreadable_overrides_file_does_not_also_report_vanished_entries(self):
+        root = self.make_repo({"STAGES.md": STAGES_OPEN, "OVERRIDES.md": overrides_doc(entry(1))})
+        write(root, "OVERRIDES.md", b"\xff\xfe broken")
+        problems, _ = check_project(root)
+        self.assertTrue(any("not valid UTF-8" in p.message for p in problems), problems)
+        self.assertFalse(any("vanished" in p.message for p in problems), problems)
+
+    def test_a_deleted_overrides_file_is_reported_as_vanished_by_the_project_check(self):
+        root = self.make_repo({"STAGES.md": STAGES_OPEN, "OVERRIDES.md": overrides_doc(entry(1))})
+        (root / "OVERRIDES.md").unlink()
+        problems, _ = check_project(root)
+        self.assertTrue(any("vanished" in p.message for p in problems), problems)
+
+    def test_problems_come_back_sorted_and_without_repeats(self):
+        """A file cited by two stages gives the same UTF-8 problem twice; it is reported once, in file and line order."""
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "OWNERSHIP.md": b"\xff\xfe"})
+        text = table(row(0, "passed", "file:REQUIREMENTS.md,file:ATTACKS.md"), row(5, "passed", "file:OWNERSHIP.md"),
+                     row(6, "passed", "file:OWNERSHIP.md"))
+        commit(root, {"STAGES.md": text}, "stages")
+        problems, _ = check_project(root)
+        keys = [(p.file, p.line, p.message) for p in problems]
+        self.assertEqual(keys, sorted(set(keys)))
+        self.assertEqual(sum(1 for p in problems if p.file == "OWNERSHIP.md" and "not valid UTF-8" in p.message), 1)
+        self.assertGreater(len({p.file for p in problems}), 1)
+
+    def test_the_command_refuses_two_arguments_and_a_file(self):
+        root = self.make_repo()
+        self.assertEqual(run_main([str(root), str(root)])[0], 2)
+        self.assertEqual(run_main([str(root / "README.md")])[0], 2)
+
+
+class ManifestSurvivorRules(unittest.TestCase):
+    def test_a_wildcard_pin_is_not_a_pinned_version(self):
+        self.assertEqual(check_gates._requirements_deps("flask==3.*\n"), [("flask", None)])
+        self.assertEqual(check_gates._requirements_deps("flask==3.0.1\n"), [("flask", "3.0.1")])
+
+    def test_an_operator_before_the_double_equals_is_not_a_pin(self):
+        self.assertEqual(check_gates._pep508("flask!==1.0"), ("flask", None))
+
+    def test_a_package_json_that_is_not_an_object_is_unreadable(self):
+        self.assertIsNone(check_gates._package_json_deps("[1, 2]"))
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "package.json").write_text("[1, 2]", encoding="utf-8")
+            deps, unreadable = manifest_dependencies(tmp, ["package.json"])
+        self.assertEqual((deps, unreadable), ({}, ["package.json"]))
+
+    def test_attack_ids_ignore_rows_whose_id_is_not_an_attack_id(self):
+        text = attack_doc(0, size_rows=[("ATK-1", "a", "3", "x"), ("FOO", "b", "3", "x")])
+        self.assertEqual(check_gates.attack_ids(text), {"ATK-1"})
+
+    def test_an_empty_test_table_cell_is_called_empty(self):
+        self.assertTrue(check_gates._rung_problem("", Path("."), set()).startswith("empty"))
+
+
 if __name__ == "__main__":
     unittest.main()
