@@ -175,6 +175,10 @@ def decode(data: bytes, name: str):
 # ------------------------------------------------------------------------- git
 
 def git(root, *args: str) -> subprocess.CompletedProcess:
+    """Run git. An argument holding a NUL cannot be passed to any program (found by the robustness fuzz: a commit
+    value from STAGES.md raised ValueError), so such a call counts as a failed git command, never a crash."""
+    if any("\x00" in str(arg) for arg in (root, *args)):
+        return subprocess.CompletedProcess(args, 128, b"", b"argument holds a NUL character")
     try:
         return subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(root), *args],
                               capture_output=True, stdin=subprocess.DEVNULL)
@@ -367,13 +371,15 @@ _ARCHITECTURE = Need("file", "ARCHITECTURE.md", "ARCHITECTURE.md")
 _RESULTS = Need("file", "RESULTS.md", "RESULTS.md")
 _OWNERSHIP = Need("file", "OWNERSHIP.md", "OWNERSHIP.md")
 _AI_LOG = Need("file", "AI-Agents.md", "AI-Agents.md")
+_GRILLING = Need("file", "GRILLING.md", "GRILLING.md")
 
 # Design section 11: required evidence per stage and size. The GO-LIVE.md requirement joins stage 5 with the traits.
+# GRILLING.md binds stages 0 and 1 on both sizes: the owner's ruling of 2026-11-10 (D27), grilling on every project.
 REQUIRED: dict[tuple[int, str], tuple[Need, ...]] = {
-    (0, "small"): _REQUIREMENTS,
-    (0, "full"): _REQUIREMENTS,
-    (1, "small"): (_DECISIONS,),
-    (1, "full"): (_DECISIONS, _DESIGN),
+    (0, "small"): _REQUIREMENTS + (_GRILLING,),
+    (0, "full"): _REQUIREMENTS + (_GRILLING,),
+    (1, "small"): (_DECISIONS, _GRILLING),
+    (1, "full"): (_DECISIONS, _DESIGN, _GRILLING),
     (2, "small"): (Need("file", "PLAN.md", "PLAN.md"),),
     (2, "full"): (Need("under", "docs/plans/", "a plan file in docs/plans/"),),
     (3, "small"): _BUILD,
@@ -429,6 +435,8 @@ def _marker_text(rel: str, text: str, stage) -> str:
     section counts, because the Full round belongs to stage 6."""
     if stage == 5 and rel == OWNERSHIP_FILE:
         return "\n".join(section_lines(text, "Explain-back") or [])
+    if rel == GRILLING_FILE and stage in GRILL_SECTIONS:     # stage 0 leaves the Design rows as the template's
+        return "\n".join(section_lines(text, GRILL_SECTIONS[stage]) or [])
     return "\n".join(clean_lines(text))
 
 
@@ -521,7 +529,9 @@ def retro_problems(text: str) -> list[str]:
 # A rule runs only at the stage that needs the file, so a file cited elsewhere is not judged by the wrong rule.
 CONTENT_RULES = {
     (0, "REQUIREMENTS.md"): req_problems,
+    (0, "GRILLING.md"): lambda text: grilling_problems(text, GRILL_SECTIONS[0]),
     (1, "DECISIONS.md"): decisions_entry_problems,
+    (1, "GRILLING.md"): lambda text: grilling_problems(text, GRILL_SECTIONS[1]),
     (3, "BUILD-LEDGER.md"): ledger_problems,
     (7, "AI-Agents.md"): retro_problems,
 }
@@ -1442,6 +1452,52 @@ def _go_live_status_problems(number, label, status, evidence, overrides, file) -
         return [Problem(file, number, f"{label}: unresolved (status '{status}'); it must be one of: "
                                       + ", ".join(GO_LIVE_STATUSES))]
     return []
+
+
+# ------------------------------------------------------------------ GRILLING.md
+
+# The owner is grilled on the requirements at stage 0 and on the design at stage 1, on every project, Small or Full
+# (owner's ruling, D27). The record shows the challenge, the owner's own answer and what it changed.
+GRILLING_FILE = "GRILLING.md"
+GRILL_SECTIONS = {0: "Intake", 1: "Design"}
+GRILL_COLUMNS = ["Challenge", "Owner's answer", "Outcome"]
+GRILL_METHOD = re.compile(r"^Grilled with:[ \t]*(.*?)[ \t]*$")
+MIN_GRILL = 3
+
+
+def grilling_problems(text, section: str) -> list[str]:
+    """Messages for one section of GRILLING.md: the method line, the table, and at least MIN_GRILL answered rows.
+    The same minimum holds on Small and Full projects."""
+    found = _section(text, section)
+    if found is None:
+        return [f"no '## {section}' section; the owner's grilling for this stage goes there"]
+    head, body = found
+    problems = []
+    methods = [GRILL_METHOD.match(line) for _, line in body]
+    methods = [m for m in methods if m]
+    if not methods:
+        problems.append(f"'## {section}' has no line 'Grilled with: ...'; name the grilling skill, or "
+                        "'fallback: written challenges' when it is not installed")
+    elif _blank(methods[0].group(1)):
+        problems.append(f"'## {section}': Grilled with is empty; name the grilling skill or the fallback")
+    rows, errors = _table(head, body, GRILL_COLUMNS)
+    problems += [message for _, message in errors]
+    answered = 0
+    for _, cells in rows:
+        label = cells[0].strip() or "a row"
+        if not cells[0].strip():
+            problems.append(f"'## {section}': a Challenge is blank")
+        if _blank(cells[1]):
+            problems.append(f"'## {section}': {label}: the owner's answer is blank; the owner's own words go here")
+        elif EXAMPLE_MARKER not in "".join(cells):
+            answered += 1
+        if not cells[2].strip():
+            problems.append(f"'## {section}': {label}: Outcome is blank; write what the answer changed (a REQ, ATK "
+                            "or D id) or 'kept'")
+    if not errors and answered < MIN_GRILL:
+        problems.append(f"'## {section}': {answered} answered challenges; every project, Small or Full, needs at "
+                        f"least {MIN_GRILL}")
+    return problems
 
 
 # ----------------------------------------------------------------- OWNERSHIP.md

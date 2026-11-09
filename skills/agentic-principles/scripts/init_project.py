@@ -37,7 +37,7 @@ REPO = Path(__file__).resolve().parents[3]
 TEMPLATES = REPO / "templates"
 STAGES_FILE = "STAGES.md"
 COMMON = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "ATTACKS.md", "GLOSSARY.md", "BUILD-LEDGER.md",
-          STAGES_FILE, "ARCHITECTURE.md", "OWNERSHIP.md")
+          STAGES_FILE, "ARCHITECTURE.md", "OWNERSHIP.md", "GRILLING.md")
 FULL_ONLY = ("OVERRIDES.md", "GO-LIVE.md")
 WORKFLOW = ".github/workflows/agentic-checks.yml"
 ARCHIVE_DIR = "docs/archive"

@@ -151,7 +151,7 @@ class GitCase(unittest.TestCase):
 
 class StageRules(GitCase):
     def setUp(self):
-        self.root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK,
+        self.root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "GRILLING.md": GRILL_OK,
                                     "DECISIONS.md": DECISIONS_OK, "README.md": "# project\n"})
 
     def check(self, text, overrides=None):
@@ -173,10 +173,10 @@ class StageRules(GitCase):
         self.assert_mentions(self.check(self.stage0("file:nope.md")), "nope.md")
 
     def test_complete_stage_0_passes(self):
-        self.assertEqual(self.check(self.stage0("file:REQUIREMENTS.md,file:ATTACKS.md")), [])
+        self.assertEqual(self.check(self.stage0(EV0)), [])
 
     def test_spaces_after_the_comma_are_fine(self):
-        self.assertEqual(self.check(self.stage0("file:REQUIREMENTS.md, file:ATTACKS.md")), [])
+        self.assertEqual(self.check(self.stage0("file:REQUIREMENTS.md, file:ATTACKS.md, file:GRILLING.md")), [])
 
     def test_missing_required_file_is_named(self):
         self.assert_mentions(self.check(self.stage0("file:REQUIREMENTS.md")), "ATTACKS.md")
@@ -212,7 +212,7 @@ class StageRules(GitCase):
 
     def test_backslash_path_is_read_as_a_path(self):
         commit(self.root, {"docs/a.md": "text\n"})
-        problems = self.check(self.stage0(r"file:docs\a.md,file:REQUIREMENTS.md,file:ATTACKS.md"))
+        problems = self.check(self.stage0(r"file:docs\a.md,file:REQUIREMENTS.md,file:ATTACKS.md,file:GRILLING.md"))
         self.assertEqual(problems, [])
 
     def test_zero_byte_file_is_refused(self):
@@ -584,16 +584,16 @@ class EvidenceRules(GitCase):
         self.assert_mentions(self.run_check(root, 0, "small", "file:REQUIREMENTS.md,file:ATTACKS.md"), "REQ")
 
     def test_stage_0_with_req_id_passes(self):
-        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK})
-        self.assertEqual(self.run_check(root, 0, "small", "file:REQUIREMENTS.md,file:ATTACKS.md"), [])
+        root = self.make_repo({"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": ATTACKS_OK, "GRILLING.md": GRILL_OK})
+        self.assertEqual(self.run_check(root, 0, "small", EV0), [])
 
     def test_stage_1_decisions_without_entry_fires(self):
         root = self.make_repo({"DECISIONS.md": "# Decisions\n"})
         self.assert_mentions(self.run_check(root, 1, "small", "file:DECISIONS.md"), "entry")
 
     def test_stage_1_small_with_entry_passes(self):
-        root = self.make_repo({"DECISIONS.md": DECISIONS_OK})
-        self.assertEqual(self.run_check(root, 1, "small", "file:DECISIONS.md"), [])
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "GRILLING.md": GRILL_OK})
+        self.assertEqual(self.run_check(root, 1, "small", EV1), [])
 
     def test_stage_1_full_needs_a_design_file(self):
         root = self.make_repo({"DECISIONS.md": DECISIONS_OK})
@@ -718,8 +718,8 @@ class EvidenceRules(GitCase):
         self.assertEqual(self.run_check(root, 7, "small", "file:AI-Agents.md"), [])
 
     def test_rules_apply_only_at_their_stage(self):
-        root = self.make_repo({"AI-Agents.md": "# AI log\n", "DECISIONS.md": DECISIONS_OK})
-        self.assertEqual(self.run_check(root, 1, "small", "file:AI-Agents.md,file:DECISIONS.md"), [])
+        root = self.make_repo({"AI-Agents.md": "# AI log\n", "DECISIONS.md": DECISIONS_OK, "GRILLING.md": GRILL_OK})
+        self.assertEqual(self.run_check(root, 1, "small", "file:AI-Agents.md," + EV1), [])
 
 
 class MarkerRules(GitCase):
@@ -2090,6 +2090,14 @@ class OwnershipRules(GitCase):
                 self.check(text)
 
 
+class NulInGitArguments(GitCase):
+    def test_a_commit_value_with_a_nul_is_a_failed_lookup_not_a_crash(self):
+        """Found by the robustness fuzz on 2026-11-10: 'commit:<hash>\\x00...' in STAGES.md reached git and raised."""
+        root = self.make_repo()
+        self.assertIsNone(check_gates.resolve_commit(root, "abc1234\x00def"))
+        self.assertNotEqual(check_gates.git(root, "rev-parse", "a\x00b").returncode, 0)
+
+
 class GrillingRules(unittest.TestCase):
     """GRILLING.md: the owner grilled on the requirements (Intake) and the design (Design), on every project."""
 
@@ -2202,7 +2210,7 @@ class GoLiveTiming(GitCase):
         attack_rows = [(f"ATK-{i}", "an attack", "3" if i == 1 else "-", "x") for i in range(1, 6 if big else 4)]
         attack_names = [r[0] for r in attack_rows]
         files = {"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": attack_doc(0, size_rows=attack_rows),
-                 "DECISIONS.md": DECISIONS_OK, "BUILD-LEDGER.md": LEDGER_OK,
+                 "DECISIONS.md": DECISIONS_OK, "BUILD-LEDGER.md": LEDGER_OK, "GRILLING.md": GRILL_OK,
                  "GO-LIVE.md": golive or golive_ok(["C-SEC-1", *attack_names]),
                  "OWNERSHIP.md": ownership_doc(explain=EB_OK if explain is None else explain, full=rounds,
                                                commit={"src": built, "base": base}[hand],
@@ -2220,8 +2228,8 @@ class GoLiveTiming(GitCase):
         parts = [*comps, "REQ-1", *attack_names]
         tests = [trow(p, *((E,) * 5 if big else (E, E, E if p == "ATK-1" else "", "", ""))) for p in parts]
         files["ARCHITECTURE.md"] = doc(comps=list(comps), map=names, deps=list(deps), tests=tests, manual=manual)
-        evidence = {0: "file:REQUIREMENTS.md,file:ATTACKS.md",
-                    1: "file:DECISIONS.md" + (",file:docs/design.md" if big else ""),
+        evidence = {0: EV0,
+                    1: EV1 + (",file:docs/design.md" if big else ""),
                     2: "file:docs/plans/p.md" if big else "file:PLAN.md",
                     3: f"commit:{built},file:BUILD-LEDGER.md",
                     4: "file:ARCHITECTURE.md" + (",file:RESULTS.md" if big else ""), 5: stage5,
@@ -2817,8 +2825,8 @@ class ArchivedEvidenceRules(GitCase):
         self.assert_mentions(evidence_content_problems(1, "full", root, ls(root), r, None), "design")
 
     def test_a_design_file_beside_the_archive_still_counts(self):
-        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n"})
-        r = Row(10, STAGE_NAMES[1], "passed", "file:DECISIONS.md,file:docs/design.md", "-")
+        root = self.make_repo({"DECISIONS.md": DECISIONS_OK, "docs/design.md": "design\n", "GRILLING.md": GRILL_OK})
+        r = Row(10, STAGE_NAMES[1], "passed", EV1 + ",file:docs/design.md", "-")
         self.assertEqual(evidence_content_problems(1, "full", root, ls(root), r, None), [])
 
     def test_an_archived_stages_file_is_never_evidence(self):
