@@ -71,7 +71,7 @@ def _frontmatter_name(path: Path) -> str | None:
 def installed(plugins_dir: Path, settings: Path) -> set[str]:
     try:
         enabled = json.loads(Path(settings).read_text(encoding="utf-8")).get("enabledPlugins", {})
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, RecursionError):      # RecursionError: JSON nested past the parser's limit
         return set()
     if not isinstance(enabled, dict):
         return set()
@@ -80,19 +80,25 @@ def installed(plugins_dir: Path, settings: Path) -> set[str]:
         plugin, _, market = key.partition("@")
         if on is not True or not market:
             continue
-        versions = [
-            d for d in (Path(plugins_dir) / "cache" / market / plugin).glob("*")
-            if d.is_dir() and not d.name.startswith("temp_git_")
-        ]
-        if not versions:
+        try:
+            found |= _plugin_names(Path(plugins_dir) / "cache" / market / plugin, plugin)
+        except (OSError, ValueError):                       # a key that is no valid path (for example a NUL) names nothing
             continue
-        newest = max(versions, key=_version_key)
-        for skill in newest.rglob("SKILL.md"):
-            name = _frontmatter_name(skill)
-            if name:
-                found.add(f"{plugin}:{name}")
-        found.update(f"{plugin}:{p.stem}" for p in (newest / "agents").glob("*.md"))
-        found.update(f"/{plugin}:{p.stem}" for p in (newest / "commands").glob("*.md"))
+    return found
+
+
+def _plugin_names(folder: Path, plugin: str) -> set[str]:
+    versions = [d for d in folder.glob("*") if d.is_dir() and not d.name.startswith("temp_git_")]
+    if not versions:
+        return set()
+    newest = max(versions, key=_version_key)
+    found: set[str] = set()
+    for skill in newest.rglob("SKILL.md"):
+        name = _frontmatter_name(skill)
+        if name:
+            found.add(f"{plugin}:{name}")
+    found.update(f"{plugin}:{p.stem}" for p in (newest / "agents").glob("*.md"))
+    found.update(f"/{plugin}:{p.stem}" for p in (newest / "commands").glob("*.md"))
     return found
 
 
