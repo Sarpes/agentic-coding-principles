@@ -5,6 +5,9 @@ The record of where the project stands. check_gates.py reads this file; keep the
 
 Size: small or full. Small is one script or module with no live users, no personal data and no paid calls.
 Method: normal (one session works through the plan) or sub-agent (one writer and a separate reviewer per task).
+Cycle: N. The first cycle of work is 1. Starting another cycle (init_project.py --new-cycle) archives this
+file and adds one; the gate measures commit evidence from the oldest commit whose STAGES.md holds the current
+number, so never reuse or lower a number.
 Adopted-at: N (optional). For a project that already existed: stages below N may be marked "adopted", which means
 "not done under this process", never "passed". N must be in this file's first commit, and at most 5.
 Traits: a, b (optional). Traits no script can detect, such as personal-data. "Traits: none" is allowed.
@@ -23,6 +26,7 @@ A stage may be passed only when every earlier stage is closed.
 
 Size: small
 Method: normal
+Cycle: 1
 
 | Stage | Status | Evidence | Override |
 |---|---|---|---|

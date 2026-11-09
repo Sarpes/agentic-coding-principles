@@ -192,6 +192,16 @@ Decision log for Agentic Coding Principles. Each decision has seven fields; none
 - **Cost / trade-off:** Contract testing and mutation testing, which the design names, appear in none of the six, so they have no item yet. Sources change edition (the OWASP Top 10 moved from 2021 to 2025 during this work), so cited pages need re-reading when a new edition appears. The builder checks that an address is present, not that the page says what the item claims; that rests on the reviewer opening the page.
 - **What would make you change it:** A needed practice that none of the six describes, such as contract testing, would justify adding a seventh primary source with its own decision entry.
 
+### D20. A Cycle line marks where a cycle of work starts
+
+- **Context:** The Stage 3 rule asks for a commit made after `STAGES.md` first appeared, and the Adopted-at rules read the first commit of the file. A second cycle archives the old `STAGES.md` and writes a new one. When the owner does that in one commit, git records a modification of the same path, so "first commit of the file" still named the first cycle and its commits kept satisfying the rule. The first version only printed an instruction to commit in two steps.
+- **Options considered:** (a) print the two-commit instruction and rely on the owner; (b) look for the newest commit that added the file; (c) a `Cycle: N` line in `STAGES.md`, where the start of the cycle is the oldest commit whose committed `STAGES.md` holds the current number; (d) compare content to detect a restart.
+- **Chosen:** (c). `init` writes `Cycle: 1`, `--new-cycle` archives the file and writes the next number, and `check_gates.py` reports a missing or malformed line at its line.
+- **Why:** The rule now rests on a value that is in the file and in history, so it holds whether the new cycle is one commit or two, and a missing line is a visible problem instead of a quiet gap.
+- **Rejected:** (a), because nothing enforced it and a single commit weakened the Stage 3 rule without any message; (b), because a one-commit restart is a modification, not an add; (d), because content such as an all-open table also appears legitimately in the middle of a cycle.
+- **Cost / trade-off:** Every `STAGES.md` needs one more line, and existing files without it now fail until `Cycle: 1` is added. The owner can still reuse or lower a number by hand: reusing a number makes the gate measure from the older start, which is the stricter reading, but nothing stops it.
+- **What would make you change it:** A project where several cycles run at once on different branches, because one number per file could no longer say which start applies.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

@@ -153,3 +153,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** All tests passed on the first run, so 42 rules were broken on a throwaway copy; 3 survived (two marker blocks, markers in the wrong order, a non-UTF-8 instructions file) and got tests, then all 3 went red. Also, a new cycle written in place shows git a modified file, not a new one, which would weaken the commit-evidence rule; the script now tells the owner to commit the removal and the new file separately.
+
+### 20. Review round on the setup script: the Cycle line and linked destinations (2026-11-09)
+
+- **Prompt (or summary of it):** Fix two review findings test-first: make the start of a work cycle a value the gate reads from the stage file instead of an instruction the owner must follow, and make the setup script refuse any destination that is a link or resolves outside the project.
+- **What the AI produced:** 32 failing tests in a first commit (16 in the setup tests, 15 in the gate tests, 1 in the template tests), then a required `Cycle: N` line, a function that returns the oldest commit holding the current number, replacement of the old first-commit lookup, a guard on every destination with temporary-file replacement, and decision D20.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first version of the setup script handled the new-cycle risk with a printed note, which enforced nothing; the review caught it. Also, an existing test restarted the stage file with the same number and kept passing under the new rule only after I gave it a new number, and a heredoc turned a newline escape in a test into a real newline, which I saw when I read the file back.

@@ -22,6 +22,7 @@ Layout (one file, standard library only):
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -88,6 +89,42 @@ def _source_bytes(path: Path) -> bytes:
     return path.read_bytes()
 
 
+def _safe(root: Path, rel: str) -> Path:
+    """root/rel, refused when the file or any folder on the way to it is a link, or when it resolves outside root.
+
+    A link inside a cloned project could otherwise lead a write to a file outside the project."""
+    isjunction = getattr(os.path, "isjunction", lambda _path: False)
+    probe = root
+    for part in Path(rel).parts:
+        probe = probe / part
+        if probe.is_symlink() or isjunction(probe):
+            raise InitError(f"{rel} is or passes through a link ({probe}); a link could lead the write outside "
+                            "the project, so nothing was written. Replace the link with a real file or folder")
+    path = root / rel
+    try:
+        inside = path.resolve().is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        inside = False
+    if not inside:
+        raise InitError(f"{rel} resolves to a place outside the project folder; nothing was written")
+    return path
+
+
+def _replace(path: Path, data: bytes) -> None:
+    """Replace an existing file: write a temporary file in the same folder, then swap it in."""
+    tmp = path.with_name(f"{path.name}.tmp{os.getpid()}")
+    try:
+        with open(tmp, "xb") as handle:
+            handle.write(data)
+        os.replace(tmp, path)
+    except OSError as error:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise InitError(f"cannot replace {path}: {error}") from error
+
+
 def _write_new(path: Path, data: bytes) -> bool:
     """Create the file with `data`; False (and nothing changed) when it already exists. Never overwrites."""
     try:
@@ -127,15 +164,17 @@ def _replace_line(lines: list[str], old: str, new: list[str]) -> list[str]:
     return lines[:hits[0]] + new + lines[hits[0] + 1:]
 
 
-def render_stages(size: str, method: str, adopt_at: int | None = None, traits: set[str] | None = None) -> bytes:
-    """The STAGES.md template with Size, Method and optional Adopted-at, Traits and adopted rows filled in."""
+def render_stages(size: str, method: str, adopt_at: int | None = None, traits: set[str] | None = None,
+                  cycle: int = 1) -> bytes:
+    """The STAGES.md template with Size, Method, Cycle and optional Adopted-at, Traits and adopted rows filled in."""
     text = _decode(_source_bytes(TEMPLATES / STAGES_FILE), STAGES_FILE).lstrip("﻿").replace("\r\n", "\n")
     lines = text.split("\n")
     lines = _replace_line(lines, "Size: small", [f"Size: {size}"])
     extra = [f"Adopted-at: {adopt_at}"] if adopt_at is not None else []
     if traits is not None:
         extra.append("Traits: " + (", ".join(sorted(traits)) or "none"))
-    lines = _replace_line(lines, "Method: normal", [f"Method: {method}", *extra])
+    lines = _replace_line(lines, "Method: normal", [f"Method: {method}"])
+    lines = _replace_line(lines, "Cycle: 1", [f"Cycle: {cycle}", *extra])
     for n in range(adopt_at or 0):
         name = check_gates.STAGE_NAMES[n]
         lines = _replace_line(lines, f"| {name} | open | - | - |", [f"| {name} | adopted | - | - |"])
@@ -179,18 +218,20 @@ def init(target, size, method, adopt_at=None) -> Report:
     files += [(rel, _source_bytes(source)) for rel, source in CHECKS.items()]
     files.append((WORKFLOW, _source_bytes(TEMPLATES / "agentic-checks.yml")))
     claude = _claude_path(root)
+    claude_rel = claude.relative_to(root).as_posix()
+    targets = [(rel, _safe(root, rel), data) for rel, data in files]
+    _safe(root, claude_rel)
     before = claude.read_bytes() if claude.is_file() else None
     after = claude_block(_decode(before, claude.name) if before is not None else "").encode("utf-8")
     report = Report()
-    for rel, data in files:
-        (report.created if _write_new(root / rel, data) else report.kept).append(rel)
+    for rel, path, data in targets:
+        (report.created if _write_new(path, data) else report.kept).append(rel)
     if before != after:
-        try:
-            claude.parent.mkdir(parents=True, exist_ok=True)
-            claude.write_bytes(after)
-        except OSError as error:
-            raise InitError(f"cannot write {claude}: {error}") from error
-        report.created.append(claude.relative_to(root).as_posix())
+        if before is None:
+            _write_new(claude, after)
+        else:
+            _replace(claude, after)
+        report.created.append(claude_rel)
     report.notes.append("Nothing was committed. Read what was created, then commit it; the first commit of "
                         f"{STAGES_FILE} is the start the gate measures from.")
     return report
@@ -200,9 +241,10 @@ def update_checks(target) -> Report:
     """Bring the copied check scripts and the checklist up to date; a changed file is backed up first."""
     root = _folder(target)
     wanted = {rel: _source_bytes(source) for rel, source in CHECKS.items()}
+    paths = {rel: _safe(root, rel) for rel in wanted}
     report = Report()
     for rel, data in wanted.items():
-        path = root / rel
+        path = paths[rel]
         if _write_new(path, data):
             report.created.append(rel)
             continue
@@ -211,13 +253,10 @@ def update_checks(target) -> Report:
             report.kept.append(rel)
             continue
         number, backup = 1, f"{rel}.bak"
-        while not _write_new(root / backup, old):               # an earlier backup is never overwritten
+        while not _write_new(_safe(root, backup), old):         # an earlier backup is never overwritten
             number += 1
             backup = f"{rel}.bak{number}"
-        try:
-            path.write_bytes(data)
-        except OSError as error:
-            raise InitError(f"cannot replace {path}: {error}") from error
+        _replace(path, data)
         report.updated.append(rel)
         report.backups.append(backup)
     return report
@@ -226,7 +265,8 @@ def update_checks(target) -> Report:
 def new_cycle(target) -> Report:
     """Archive STAGES.md as docs/archive/STAGES-cycle-N.md and write a fresh one with the same Size and Method."""
     root = _folder(target)
-    path = root / STAGES_FILE
+    path = _safe(root, STAGES_FILE)
+    _safe(root, ARCHIVE_DIR)
     if not path.is_file():
         raise InitError(f"{path} does not exist; there is no cycle to archive")
     old = path.read_bytes()
@@ -234,21 +274,18 @@ def new_cycle(target) -> Report:
     if stages.size is None or stages.method is None:
         raise InitError(f"{STAGES_FILE} has no readable Size and Method lines; fix them first, so the new cycle "
                         "can keep them")
-    fresh = render_stages(stages.size, stages.method, None, stages.traits)
+    cycle = (stages.cycle or 1) + 1
+    fresh = render_stages(stages.size, stages.method, None, stages.traits, cycle)
     number = 1
-    while not _write_new(root / ARCHIVE_DIR / f"STAGES-cycle-{number}.md", old):
+    while not _write_new(_safe(root, f"{ARCHIVE_DIR}/STAGES-cycle-{number}.md"), old):
         number += 1
     archive = f"{ARCHIVE_DIR}/STAGES-cycle-{number}.md"
-    try:
-        path.write_bytes(fresh)
-    except OSError as error:
-        raise InitError(f"cannot write {path}: {error}") from error
+    _replace(path, fresh)
     report = Report(created=[archive], updated=[STAGES_FILE])
     report.notes.append(
-        f"Commit in two commits, so the gate sees a new start: first git add {archive} and git rm --cached "
-        f"{STAGES_FILE}, then commit; then git add {STAGES_FILE} and commit again. The gate takes the newest "
-        f"commit that added {STAGES_FILE} as the start of the cycle, and one combined commit would look like an "
-        "edit of the old file.")
+        f"{STAGES_FILE} now says Cycle: {cycle}. Commit it together with {archive}, or in two commits; either way "
+        "the gate measures commit evidence from the oldest commit whose STAGES.md holds Cycle: "
+        f"{cycle}, so commits of the earlier cycle no longer count.")
     return report
 
 

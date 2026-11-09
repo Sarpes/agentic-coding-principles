@@ -365,6 +365,15 @@ class CycleRules(GitCase):
         root, _, start = self.two_cycle_repo(one_commit=False)
         self.assertEqual(cycle_start(root, "STAGES.md", 2), start)
 
+    def test_no_cycle_value_gives_none_even_when_history_exists(self):
+        root, _, _ = self.two_cycle_repo(one_commit=True)
+        self.assertIsNone(cycle_start(root, "STAGES.md", None))
+
+    def test_a_file_committed_without_a_cycle_line_has_no_start(self):
+        root = self.make_repo({"README.md": "x\n"})
+        commit(root, {"STAGES.md": table().replace("Cycle: 1\n", "")}, "old format")
+        self.assertIsNone(cycle_start(root, "STAGES.md", None))
+
     def test_no_commit_holding_the_value_gives_none(self):
         root, _, _ = self.two_cycle_repo(one_commit=True)
         self.assertIsNone(cycle_start(root, "STAGES.md", 3))

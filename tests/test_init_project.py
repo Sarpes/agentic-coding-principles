@@ -376,10 +376,22 @@ class TestAdopt(InitCase):
         commit(root, remove=("STAGES.md",), message="archive the first cycle")
         second = init_project.init(root, "small", "normal", adopt_at=4)
         self.assertEqual(second.created, ["STAGES.md"])
+        text = (root / "STAGES.md").read_text(encoding="utf-8")
+        (root / "STAGES.md").write_text(text.replace("\nCycle: 1\n", "\nCycle: 2\n", 1), encoding="utf-8")
         git(root, "add", "--", "STAGES.md")
         git(root, "commit", "-q", "-m", "second cycle setup")
         problems = self.gate(root)
         self.assertEqual(problems, [], messages(problems))
+
+    def test_a_restarted_stages_file_that_reuses_the_cycle_number_is_caught(self):
+        root = self.make_repo({"README.md": "x\n", "app.py": "print(1)\n"})
+        first = init_project.init(root, "small", "normal", adopt_at=2)
+        self.commit_report(root, first)
+        commit(root, remove=("STAGES.md",), message="archive the first cycle")
+        init_project.init(root, "small", "normal", adopt_at=4)
+        git(root, "add", "--", "STAGES.md")
+        git(root, "commit", "-q", "-m", "second cycle setup, same number")
+        self.assertTrue(any("first commit" in m for m in messages(self.gate(root))))
 
 
 class TestWorkflow(InitCase):
@@ -724,6 +736,25 @@ class TestLinks(InitCase):
             with self.assertRaises(InitError):
                 init_project.init(root, "small", "normal")
         self.assertFalse((root / "STAGES.md").exists())
+
+    def test_a_destination_that_resolves_outside_the_project_is_refused_without_a_link(self):
+        root, outside = self.make_repo(), self.outside()
+        real = Path.resolve
+
+        def resolve(self, *args, **kwargs):
+            return outside if self.name == "CLAUDE.md" else real(self, *args, **kwargs)
+
+        with mock.patch.object(Path, "resolve", resolve):
+            with self.assertRaises(InitError):
+                init_project.init(root, "small", "normal")
+        self.assertFalse((root / "STAGES.md").exists())
+
+    def test_an_existing_claude_md_is_replaced_through_a_temporary_file(self):
+        root = self.make_repo({"README.md": "x\n", "CLAUDE.md": "# Mine\n"})
+        with mock.patch.object(os, "replace", wraps=os.replace) as swap:
+            init_project.init(root, "small", "normal")
+        self.assertEqual([Path(call.args[1]).name for call in swap.call_args_list], ["CLAUDE.md"])
+        self.assertIn("# Mine", (root / "CLAUDE.md").read_text(encoding="utf-8"))
 
     def test_ordinary_files_are_not_mistaken_for_links(self):
         root, report = self.make_project("small")

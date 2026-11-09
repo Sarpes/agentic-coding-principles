@@ -12,7 +12,7 @@ repository it ships in. Git is run through the `git` command.
 
 Layout (one file on purpose, so it can be copied alone; search for the section banner):
   text helpers      comment/fence blanking, table rows, UTF-8 decoding
-  git               tracked files, first commit of a file, ancestry
+  git               tracked files, the start of a cycle, ancestry
   STAGES.md         parse_stages and its table parser
   evidence          the REQUIRED table, evidence items, per-file content rules
   stage checks      stage_problems: evidence, ordering, overrides, adoption
@@ -197,11 +197,20 @@ def require_checkable_repo(root: Path) -> None:
                         "(run: git fetch --unshallow)")
 
 
-def first_commit_of(root, name: str) -> str | None:
-    """The commit that added `name` in the current cycle: the newest add, because a new cycle adds it again."""
-    out = git_text(root, "log", "--diff-filter=A", "--format=%H", "--", name)
-    lines = out.split() if out else []
-    return lines[0] if lines else None
+def cycle_start(root, name: str, cycle) -> str | None:
+    """The start of a cycle: the oldest commit in which the committed `name` holds this Cycle value.
+
+    A new cycle is recognised by its Cycle number, not by git calling the file new, because one commit that
+    archives the old STAGES.md and rewrites it is only a modification to git. A commit that removed the file has
+    nothing to read and is skipped. None when `cycle` is None or no commit holds the value."""
+    if cycle is None:
+        return None
+    found = None
+    for commit in (git_text(root, "log", "--format=%H", "--", name) or "").split():   # newest first
+        text = git_text(root, "show", f"{commit}:{name}")
+        if text is not None and parse_stages(text).cycle == cycle:
+            found = commit                                                         # keeps the oldest
+    return found
 
 
 def resolve_commit(root, ref: str) -> str | None:
@@ -219,11 +228,6 @@ def commit_is_after(root, first: str, commit: str) -> bool:
     return bool(a and b and a != b and is_ancestor(root, a, b))
 
 
-def cycle_start(root, name: str, cycle) -> str | None:
-    """Stub for the red commit."""
-    return None
-
-
 # ------------------------------------------------------------------- STAGES.md
 
 def parse_stages(text: str) -> Stages:
@@ -231,7 +235,7 @@ def parse_stages(text: str) -> Stages:
     stages = Stages()
     seen: set[str] = set()
     table: list[tuple[int, str]] = []
-    header = re.compile(r"^(Size|Method|Adopted-at|Traits):[ \t]*(.*?)[ \t]*$")
+    header = re.compile(r"^(Size|Method|Cycle|Adopted-at|Traits):[ \t]*(.*?)[ \t]*$")
     for number, line in enumerate(lines, start=1):
         m = header.match(line)
         if not m:
@@ -254,6 +258,11 @@ def parse_stages(text: str) -> Stages:
                 stages.method = value
             else:
                 stages.errors.append((number, f"Method must be one of: {', '.join(METHODS)} (found '{value}')"))
+        elif label == "Cycle":
+            if re.fullmatch("[0-9]+", value) and int(value) >= 1:
+                stages.cycle = int(value)
+            else:
+                stages.errors.append((number, f"Cycle must be a whole number from 1 (found '{value}')"))
         elif label == "Adopted-at":
             stages.adopted_at_line = number
             if value.isdigit():
@@ -263,6 +272,8 @@ def parse_stages(text: str) -> Stages:
         else:
             names = {t.strip().lower() for t in value.split(",")} - {""}
             stages.traits = set() if names == {"none"} else names
+    if "Cycle" not in seen:
+        stages.errors.append((0, "missing line 'Cycle: N' (the first cycle is 'Cycle: 1'; a new cycle adds one)"))
     for label, found in (("Size", stages.size), ("Method", stages.method)):
         if found is None and label not in seen:
             options = " or ".join(f"'{label}: {o}'" for o in (SIZES if label == "Size" else METHODS))
@@ -508,7 +519,7 @@ def stage_problems(text: str, root, tracked, overrides: dict, file: str = STAGES
 
     def first_commit():
         if not memo:
-            memo.append(first_commit_of(root, file))
+            memo.append(cycle_start(root, file, stages.cycle))
         return memo[0]
 
     for n in sorted(stages.rows):
