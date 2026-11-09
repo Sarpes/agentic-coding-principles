@@ -4,7 +4,12 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
-- Grilling runs on every project, Small or Full, at Stage 0 Intake and Stage 1 Design (D26). New template `templates/GRILLING.md` (copied by `init_project.py`) with an `## Intake` and a `## Design` section: a `Grilled with:` line naming the skill or the fallback, and at least 3 answered rows of challenge, owner's answer and outcome.
+- Breaking: the owner's explain-back and full-round answers move out of the project repo into a private record in the companion repo next to it (`../<project>-internal/ownership/OWNERSHIP.md`, new template `templates/OWNERSHIP-RECORD.md`). The project's `OWNERSHIP.md` keeps a `Record:` line, a new `Explain-back done` date, the hand-changed commit and the re-check dates (D26). A project already under the skill must move its answers and add the two lines.
+- `check_gates.py`: reads the answers from the private record, fail-closed. From Stage 5 on, a record that cannot be read (missing, a folder, not UTF-8) fails and is reported as "could not be read", apart from a readable record without answers. An absolute `Record:` path, or one inside the project, is refused. An answer section in the project's `OWNERSHIP.md` is refused at every stage.
+- `check_gates.py --private-unavailable`: for CI, where the companion is never present; only the unreadable case becomes a printed `NOT CHECKED` note. The project CI template runs the stage gate with it.
+- `init_project.py`: fills the `Record:` line with the project folder's name, creates the record template in the companion repo when it exists (never overwriting), and otherwise says how to make the companion with repo-kickoff.
+- Stage 5 and Stage 6 instructions, the skill's rules and the README: the session that asks the questions writes the answers straight into the private record.
+- Grilling runs on every project, Small or Full, at Stage 0 Intake and Stage 1 Design (D27). New template `templates/GRILLING.md` (copied by `init_project.py`) with an `## Intake` and a `## Design` section: a `Grilled with:` line naming the skill or the fallback, and at least 3 answered rows of challenge, owner's answer and outcome.
 - `check_gates.py`: Stages 0 and 1 need `file:GRILLING.md` in their evidence on both sizes; Stage 0 judges only the Intake section, Stage 1 only the Design section. A project already past those stages must add the record or log an override.
 - `companions.json` and the stage files: `mattpocock-skills:grilling` maps to Stages 0 and 1 for every project, with written challenges as the fallback.
 - `check_gates.py`: a git argument holding a NUL character (a commit value in `STAGES.md`, found by the robustness test) is a failed lookup instead of a crash.

@@ -189,8 +189,40 @@ class TestInit(InitCase):
 
     def test_template_files_copy_the_templates_exactly(self):
         root, _ = self.make_project("full")
-        for name in ("DECISIONS.md", "ATTACKS.md", "OVERRIDES.md", "GO-LIVE.md", "OWNERSHIP.md"):
+        for name in ("DECISIONS.md", "ATTACKS.md", "OVERRIDES.md", "GO-LIVE.md"):
             self.assertEqual((root / name).read_bytes(), (ROOT / "templates" / name).read_bytes(), name)
+
+    # ---- the private record: the owner's answers go to the companion repo next to the project
+    def test_ownership_names_the_companion_by_the_project_folder(self):
+        root, _ = self.make_project("small")
+        template = (ROOT / "templates" / "OWNERSHIP.md").read_text(encoding="utf-8")
+        expected = template.replace("Record: ../<project>-internal/ownership/OWNERSHIP.md",
+                                    f"Record: ../{root.name}-internal/ownership/OWNERSHIP.md")
+        self.assertNotEqual(expected, template)
+        self.assertEqual((root / "OWNERSHIP.md").read_text(encoding="utf-8"), expected)
+
+    def test_an_existing_companion_gets_the_record_template(self):
+        root = self.make_repo()
+        (root.parent / f"{root.name}-internal").mkdir()
+        report = init_project.init(root, "small", "normal")
+        record = root.parent / f"{root.name}-internal" / "ownership" / "OWNERSHIP.md"
+        self.assertEqual(record.read_bytes(), (ROOT / "templates" / "OWNERSHIP-RECORD.md").read_bytes())
+        self.assertIn(f"../{root.name}-internal/ownership/OWNERSHIP.md", report.created)
+
+    def test_an_existing_record_is_kept(self):
+        root = self.make_repo()
+        record = root.parent / f"{root.name}-internal" / "ownership" / "OWNERSHIP.md"
+        record.parent.mkdir(parents=True)
+        record.write_bytes(b"my answers\n")
+        report = init_project.init(root, "small", "normal")
+        self.assertEqual(record.read_bytes(), b"my answers\n")
+        self.assertIn(f"../{root.name}-internal/ownership/OWNERSHIP.md", report.kept)
+
+    def test_no_companion_writes_nothing_outside_and_says_how_to_make_one(self):
+        root, report = self.make_project("small")
+        self.assertFalse((root.parent / f"{root.name}-internal").exists())
+        self.assertTrue(any(f"{root.name}-internal" in n and "--internal-only" in n for n in report.notes),
+                        report.notes)
 
 
 class TestOverridesAfterInit(InitCase):

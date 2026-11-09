@@ -1,7 +1,11 @@
 """Stage gate: checks that each stage marked done in STAGES.md has the evidence its gate needs.
 
-Usage: python check_gates.py [--go-live] [project folder]   (default: the current directory)
+Usage: python check_gates.py [--go-live] [--private-unavailable] [project folder]   (default: the current directory)
 --go-live prints the detected traits and the ids GO-LIVE.md must cover, and exits 0.
+--private-unavailable is for continuous integration only, where the owner's private record (the companion repo
+next to the project, named by the 'Record:' line of OWNERSHIP.md) never exists: a record that cannot be read is then
+printed as a NOT CHECKED note instead of failing. Everything else, a readable record included, is still checked.
+Without the flag a record that cannot be read always fails (fail-closed).
 Exit codes: 0 no problems, 1 problems found (printed as FILE:LINE: message), 2 the folder cannot be checked
 (more than one argument, not a directory, not the top of a git repository, or a shallow clone).
 Line numbers are 1-based lines of the original file; 0 means the problem concerns the whole file.
@@ -19,7 +23,8 @@ Layout (one file on purpose, so it can be copied alone; search for the section b
   OVERRIDES.md      parse_overrides and override_problems
   architecture      file map, dependency table, test table and attack list checks, manifest readers, their timing
   traits and go-live  trait detection, the Small size check, the checklist file, GO-LIVE.md rows
-  OWNERSHIP.md      explain-back (stage 5), full round, hand-changed commit and re-check (stage 6)
+  OWNERSHIP.md      the project's pointer and dates; the private record with the explain-back (stage 5) and the
+                    full round (stage 6); hand-changed commit and re-check
   stage wiring      go_live_ownership_problems: which of the above binds at which stage
   command          check_project and main
 """
@@ -34,7 +39,7 @@ import sys
 import tomllib
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 
 __version__ = "0.2.0"
@@ -1502,12 +1507,21 @@ def grilling_problems(text, section: str) -> list[str]:
 
 # ----------------------------------------------------------------- OWNERSHIP.md
 
+# The owner's answers are a record of how well the owner understands the system, in the owner's own words. They
+# never go into the project repo, which may be public: they live in a private record in the companion repo next to
+# the project, named by the 'Record:' line of the project's OWNERSHIP.md. The project file keeps only that pointer,
+# the dates and the hand-changed commit (which the gate checks against the project's own history).
 OWNERSHIP_FILE = "OWNERSHIP.md"
+RECORD_TEMPLATE = "OWNERSHIP-RECORD.md"
+RECORD_EXAMPLE = "../<project>-internal/ownership/OWNERSHIP.md"
+ANSWER_SECTIONS = ("Explain-back", "Full round")
 TOPICS = ("what-it-does", "how-it-breaks", "how-to-recover")
 EXPLAIN_COLUMNS = ["Topic", "Question", "Answer", "Gap", "Status"]
 ROUND_COLUMNS = ["Question", "Answer", "Gap", "Status"]
 OWNERSHIP_LINES = ("Hand-changed commit", "Closed", "Re-check due", "Re-check done", "Graded by")
-OWNERSHIP_LINE = re.compile(r"^(" + "|".join(OWNERSHIP_LINES) + r"):[ \t]*(.*?)[ \t]*$")
+PROJECT_STAGE6_LINES = ("Hand-changed commit", "Closed", "Re-check due", "Re-check done")
+_LINE_LABELS = ("Record", "Explain-back done") + OWNERSHIP_LINES
+OWNERSHIP_LINE = re.compile(r"^(" + "|".join(map(re.escape, _LINE_LABELS)) + r"):[ \t]*(.*?)[ \t]*$")
 MIN_ROUND = 3
 RECHECK_DAYS = 7
 
@@ -1591,6 +1605,98 @@ def ownership_problems(text, root, tracked, size, components: int, overrides,
     return problems
 
 
+def full_round_problems(text, size, components: int, overrides, file: str = OWNERSHIP_FILE) -> list[Problem]:
+    """Stage 6, in the private record: the full-round table and the grader."""
+    problems = _full_round_problems(text, size, components, overrides, file)
+    lines = _ownership_lines(text)
+    if "Graded by" not in lines:
+        problems.append(Problem(file, 0, "missing the line 'Graded by: ...'"))
+    elif _blank(lines["Graded by"][0]):
+        problems.append(Problem(file, lines["Graded by"][1], "Graded by is empty; name the separate session that "
+                                                             "compared the answers with the code"))
+    return problems
+
+
+def project_ownership_problems(text, root, stage5: bool, stage6: bool, file: str = OWNERSHIP_FILE) -> list[Problem]:
+    """The project's OWNERSHIP.md: the explain-back date once stage 5 passed; the hand-changed commit and the
+    closing and re-check dates once stage 6 passed. The answers themselves are judged in the private record."""
+    lines = _ownership_lines(text)
+    problems = []
+    if stage5:
+        if "Explain-back done" not in lines:
+            problems.append(Problem(file, 0, "missing the line 'Explain-back done: ...' (the date of the explain-back)"))
+        elif not _is_date(lines["Explain-back done"][0]):
+            problems.append(Problem(file, lines["Explain-back done"][1], f"Explain-back done "
+                                    f"'{lines['Explain-back done'][0]}' must be a date like 2026-11-09"))
+    if stage6:
+        for label in PROJECT_STAGE6_LINES:
+            if label not in lines:
+                problems.append(Problem(file, 0, f"missing the line '{label}: ...'"))
+        if "Hand-changed commit" in lines:
+            value, number = lines["Hand-changed commit"]
+            problems += _hand_change_problems(Path(root), value, number, file)
+        problems += _recheck_date_problems(lines, file)
+    return problems
+
+
+def answers_in_repo_problems(text, file: str = OWNERSHIP_FILE) -> list[Problem]:
+    """An answer section in the project repo is refused at every stage: once committed it is in the history."""
+    problems = []
+    for heading in ANSWER_SECTIONS:
+        section = _section(text, heading)
+        if section is not None:
+            problems.append(Problem(file, section[0], f"'## {heading}' is in the project repo; the owner's answers "
+                                    "belong only in the private record named by 'Record:' (template "
+                                    f"{RECORD_TEMPLATE}), never in a repo that may be public"))
+    return problems
+
+
+def _is_absolute(value: str) -> bool:
+    return PureWindowsPath(value).is_absolute() or bool(PureWindowsPath(value).drive) or \
+        PurePosixPath(value).is_absolute()
+
+
+def private_record(root, text, private_unavailable: bool = False):
+    """(record text or None, record label, problems, notes) for the record the project's 'Record:' line names.
+
+    Fail-closed: a record that cannot be read is a problem, never a pass. It is reported as 'could not be read',
+    which is a different problem from a readable record without answers (that one is judged by the section checks).
+    `private_unavailable` (continuous integration) turns only the 'could not be read' case into a NOT CHECKED note."""
+    root = Path(root)
+    lines = _ownership_lines(text)
+    if "Record" not in lines:
+        return None, None, [Problem(OWNERSHIP_FILE, 0, f"missing the line 'Record: {RECORD_EXAMPLE}' that names the "
+                                                       "private record of the owner's answers")], []
+    value, number = lines["Record"]
+    if _blank(value):
+        return None, None, [Problem(OWNERSHIP_FILE, number, f"Record is empty; name the private record, like "
+                                                            f"{RECORD_EXAMPLE}")], []
+    if _is_absolute(value):
+        return None, value, [Problem(OWNERSHIP_FILE, number, f"Record '{value}' must be a path relative to the "
+                                     f"project folder, like {RECORD_EXAMPLE}; an absolute path names one machine")], []
+    try:
+        target = (root / value).resolve()
+        inside = target.is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        target, inside = root / value, False
+    if inside:
+        return None, value, [Problem(OWNERSHIP_FILE, number, f"Record '{value}' is inside the project folder, so it "
+                                     "would be committed with the project; keep it in the private companion repo "
+                                     "next to the project")], []
+    try:
+        data = target.read_bytes()
+    except (OSError, ValueError) as error:          # ValueError: a path no system can open, such as one with NUL
+        reason = getattr(error, "strerror", None) or str(error) or type(error).__name__
+        if private_unavailable:
+            return None, value, [], [f"NOT CHECKED: the owner's answers in {value} (the private record is not "
+                                     f"available in this run: {reason}; --private-unavailable)"]
+        return None, value, [Problem(OWNERSHIP_FILE, number, f"the private record {value} could not be read "
+                                     f"({reason}); the owner's answers cannot be checked, so this gate does not pass. "
+                                     "Put the companion repo next to the project")], []
+    record, problem = decode(data, value)
+    return record, value, [problem] if problem else [], []
+
+
 def _full_round_problems(text, size, components: int, overrides, file) -> list[Problem]:
     section = _section(text, "Full round")
     if section is None:
@@ -1661,8 +1767,9 @@ def _project_traits(root: Path, tracked, stages):
     return detect_traits(root, tracked, deps) | (stages.traits or set()), unreadable
 
 
-def go_live_ownership_problems(root, tracked, stages, overrides, today: date):
-    """(problems, notes): the size rule always; go-live and explain-back at 5 passed; the full round at 6 passed."""
+def go_live_ownership_problems(root, tracked, stages, overrides, today: date, private_unavailable: bool = False):
+    """(problems, notes): the size rule always; no answers in the project repo, always; go-live and explain-back at
+    5 passed; the full round at 6 passed. The answers are read from the private record (see private_record)."""
     if stages is None:
         return [], []
     root = Path(root)
@@ -1675,14 +1782,21 @@ def go_live_ownership_problems(root, tracked, stages, overrides, today: date):
 
     architecture, _ = _load(root, ARCHITECTURE_FILE)
     ownership, found = _load(root, OWNERSHIP_FILE)
+    if ownership is not None:
+        problems += answers_in_repo_problems(ownership)
     if passed(5):
         problems += traits_line_problems(stages, unreadable, manual_manifests(architecture or ""))
         problems += _go_live_stage_problems(root, tracked, stages, overrides, traits)
-        if ownership is not None:
-            problems += explain_back_problems(ownership, overrides)
+    if ownership is not None and (passed(5) or passed(6)):
+        record, label, more, more_notes = private_record(root, ownership, private_unavailable)
+        problems += more + project_ownership_problems(ownership, root, passed(5), passed(6))
+        notes += more_notes
+        if record is not None and passed(5):
+            problems += explain_back_problems(record, overrides, label)
+        if record is not None and passed(6):
+            problems += full_round_problems(record, stages.size, len(components(architecture or "")), overrides,
+                                            label)
     if passed(6) and ownership is not None:
-        problems += ownership_problems(ownership, root, tracked, stages.size, len(components(architecture or "")),
-                                       overrides)
         note = recheck_note(ownership, today)
         if note:
             notes.append(note)
@@ -1745,8 +1859,10 @@ def _load(root: Path, name: str):
     return text, [problem] if problem else []
 
 
-def check_project(root, today: date | None = None) -> tuple[list[Problem], list[str]]:
-    """(problems, notes) for a project folder. `today` (default: the current date) only decides the re-check note."""
+def check_project(root, today: date | None = None,
+                  private_unavailable: bool = False) -> tuple[list[Problem], list[str]]:
+    """(problems, notes) for a project folder. `today` (default: the current date) only decides the re-check note;
+    `private_unavailable` is the CI mode of private_record."""
     root = Path(root)
     require_checkable_repo(root)
     tracked = tracked_files(root)
@@ -1767,7 +1883,8 @@ def check_project(root, today: date | None = None) -> tuple[list[Problem], list[
     if overrides_text is not None or not found:
         problems += override_problems(overrides_text, root, stages, OVERRIDES_FILE)
     problems += architecture_problems(root, tracked, stages, overrides)
-    found, more = go_live_ownership_problems(root, tracked, stages, overrides, today or date.today())
+    found, more = go_live_ownership_problems(root, tracked, stages, overrides, today or date.today(),
+                                             private_unavailable)
     problems += found
     notes += more
     notes += [f"open override {ident} (stage {o.stage}): see {OVERRIDES_FILE}"
@@ -1780,9 +1897,10 @@ def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     print(TRUST_LIMIT, file=sys.stderr)
     go_live = "--go-live" in args
-    args = [a for a in args if a != "--go-live"]
+    private_unavailable = "--private-unavailable" in args
+    args = [a for a in args if a not in ("--go-live", "--private-unavailable")]
     if len(args) > 1:
-        print("usage: check_gates.py [--go-live] [project folder]", file=sys.stderr)
+        print("usage: check_gates.py [--go-live] [--private-unavailable] [project folder]", file=sys.stderr)
         return 2
     root = Path(args[0]) if args else Path.cwd()
     if not root.is_dir():
@@ -1795,7 +1913,7 @@ def main(argv: list[str] | None = None) -> int:
             for line in err:
                 print(f"note: {line}", file=sys.stderr)
             return 0
-        problems, notes = check_project(root)
+        problems, notes = check_project(root, private_unavailable=private_unavailable)
     except GateError as error:
         print(f"check_gates.py: {error}", file=sys.stderr)
         return 2

@@ -3,6 +3,9 @@ name: Agentic checks
 # Runs the two project checks on every push and pull request.
 # fetch-depth 0 is required: the stage gate verifies commit evidence against the full history,
 # and a shallow clone cannot do that.
+# --private-unavailable: the owner's ownership record lives in a private companion repo that is never
+# checked out here, so the stage gate prints NOT CHECKED for it instead of failing. Run the gate locally,
+# without the flag, to check the record; there a record that cannot be read fails.
 
 on:
   push:
@@ -24,4 +27,4 @@ jobs:
       - name: Documentation gate
         run: python checks/check_docs.py .
       - name: Stage gate
-        run: python checks/check_gates.py .
+        run: python checks/check_gates.py --private-unavailable .

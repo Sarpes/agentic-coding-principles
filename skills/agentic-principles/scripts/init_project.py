@@ -7,8 +7,9 @@ Usage:
   init_project.py --where                      print the folder that holds principles/ and checklist/
 Exit codes: 0 done, 2 a bad value, a missing folder, or a file that cannot be handled safely.
 
-What init does: copies the templates and the check scripts into the project, writes a marked block into its
-CLAUDE.md and adds a continuous-integration workflow. Every copied file is opened in create-only mode, so a
+What init does: copies the templates and the check scripts into the project (OWNERSHIP.md with its Record line
+naming the companion repo ../<project>-internal, and the private record template into that repo when it exists),
+writes a marked block into its CLAUDE.md and adds a continuous-integration workflow. Every copied file is opened in create-only mode, so a
 file that already exists is never overwritten and is reported as kept. The only exceptions are the marked
 CLAUDE.md block, --update-checks (which keeps a backup) and --new-cycle (which archives first).
 It does not commit and does not run git: the owner commits what it created.
@@ -39,6 +40,10 @@ STAGES_FILE = "STAGES.md"
 COMMON = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "ATTACKS.md", "GLOSSARY.md", "BUILD-LEDGER.md",
           STAGES_FILE, "ARCHITECTURE.md", "OWNERSHIP.md", "GRILLING.md")
 FULL_ONLY = ("OVERRIDES.md", "GO-LIVE.md")
+OWNERSHIP_FILE = "OWNERSHIP.md"
+RECORD_TEMPLATE = "OWNERSHIP-RECORD.md"
+RECORD_LINE = "Record: ../<project>-internal/ownership/OWNERSHIP.md"
+COMPANION_SUFFIX = "-internal"
 WORKFLOW = ".github/workflows/agentic-checks.yml"
 ARCHIVE_DIR = "docs/archive"
 # Where each copied check lives in the project, and where it comes from in this repository.
@@ -181,6 +186,33 @@ def render_stages(size: str, method: str, adopt_at: int | None = None, traits: s
     return "\n".join(lines).encode("utf-8")
 
 
+def render_ownership(project: str) -> bytes:
+    """The OWNERSHIP.md template with the Record line naming this project's companion repo."""
+    text = _decode(_source_bytes(TEMPLATES / OWNERSHIP_FILE), OWNERSHIP_FILE)
+    if text.count(RECORD_LINE) != 1:
+        raise InitError(f"templates/{OWNERSHIP_FILE} no longer has exactly one line '{RECORD_LINE}'")
+    return text.replace(RECORD_LINE, RECORD_LINE.replace("<project>", project)).encode("utf-8")
+
+
+def _companion_record(root: Path, report: Report) -> None:
+    """Create the private record from its template in the companion repo next to the project, when that repo exists.
+    Never overwrites; with no companion, writes nothing outside the project and says how to make one."""
+    name = root.resolve().name
+    companion = root.resolve().parent / f"{name}{COMPANION_SUFFIX}"
+    rel = f"../{name}{COMPANION_SUFFIX}/ownership/{OWNERSHIP_FILE}"
+    if not companion.is_dir():
+        report.notes.append(f"No private companion repo {name}{COMPANION_SUFFIX} next to the project: the owner's "
+                            "ownership answers have nowhere to go, and check_gates.py fails at stage 5 until "
+                            f"{rel} can be read. Make it with repo-kickoff: scaffold_project.py <project folder> "
+                            f"--id {name} --co-author claude|none --internal-only, then run init again")
+        return
+    if any(p.is_symlink() for p in (companion, companion / "ownership")):
+        raise InitError(f"{companion} or its ownership folder is a link; nothing was written there")
+    data = _source_bytes(TEMPLATES / RECORD_TEMPLATE)
+    (report.created if _write_new(companion / "ownership" / OWNERSHIP_FILE, data) else report.kept).append(rel)
+    report.notes.append(f"{rel} is in the companion repo: commit it there, never in this project")
+
+
 def _claude_path(root: Path) -> Path:
     """CLAUDE.md at the top, or .claude/CLAUDE.md when that is the layout the project uses."""
     top, nested = root / "CLAUDE.md", root / ".claude" / "CLAUDE.md"
@@ -213,7 +245,12 @@ def init(target, size, method, adopt_at=None) -> Report:
     _check_values(size, method, adopt_at)
     files: list[tuple[str, bytes]] = []
     for name in COMMON + (FULL_ONLY if size == "full" else ()):
-        data = render_stages(size, method, adopt_at) if name == STAGES_FILE else _source_bytes(TEMPLATES / name)
+        if name == STAGES_FILE:
+            data = render_stages(size, method, adopt_at)
+        elif name == OWNERSHIP_FILE:
+            data = render_ownership(root.resolve().name)
+        else:
+            data = _source_bytes(TEMPLATES / name)
         files.append((name, data))
     files += [(rel, _source_bytes(source)) for rel, source in CHECKS.items()]
     files.append((WORKFLOW, _source_bytes(TEMPLATES / "agentic-checks.yml")))
@@ -232,6 +269,7 @@ def init(target, size, method, adopt_at=None) -> Report:
         else:
             _replace(claude, after)
         report.created.append(claude_rel)
+    _companion_record(root, report)
     report.notes.append("Nothing was committed. Read what was created, then commit it; the first commit of "
                         f"{STAGES_FILE} is the start the gate measures from.")
     return report
