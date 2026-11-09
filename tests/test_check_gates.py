@@ -2666,7 +2666,7 @@ class Command(GitCase):
         return self.make_repo(files)
 
     def test_module_facts(self):
-        self.assertEqual(check_gates.__version__, "0.2.0")
+        self.assertEqual(check_gates.__version__, "0.3.0")
         self.assertEqual(len(STAGE_NAMES), 8)
         self.assertEqual(Problem("a", 3, "m").line, 3)
         for ext in (".py", ".ipynb", ".ps1", ".cs", ".sh"):

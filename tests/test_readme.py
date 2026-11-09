@@ -253,6 +253,21 @@ class ChangelogTests(unittest.TestCase):
         self.assertIn("skills/agentic-principles", released)
         self.assertLess(text.index("## Unreleased"), match.start())
 
+    def test_release_0_3_0_holds_the_private_record_and_the_grilling_gate(self):
+        """Release-time check for 0.3.0: both breaking changes moved under a dated 0.3.0 heading, above 0.2.0, and
+        Unreleased left empty."""
+        text = read(ROOT / "CHANGELOG.md")
+        match = re.search(r"^## \[0\.3\.0\] - \d{4}-\d{2}-\d{2}$", text, re.M)
+        if match is None:
+            self.fail("no dated 0.3.0 section")
+        released = text[match.end():].split("\n## ", 1)[0]
+        for needle in ("OWNERSHIP-RECORD.md", "--private-unavailable", "GRILLING.md"):
+            self.assertIn(needle, released)
+        unreleased = text.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(unreleased.strip(), "")
+        self.assertLess(text.index("## Unreleased"), match.start())
+        self.assertLess(match.start(), text.index("## [0.2.0]"))
+
 
 if __name__ == "__main__":
     unittest.main()

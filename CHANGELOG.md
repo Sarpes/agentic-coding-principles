@@ -4,6 +4,10 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+## [0.3.0] - 2026-11-10
+
+Two breaking changes for projects already under the skill: move the ownership answers to the private record and add the `Record:` and `Explain-back done` lines to `OWNERSHIP.md`; add `GRILLING.md` for Stages 0 and 1 already passed, or log an override.
+
 - Breaking: the owner's explain-back and full-round answers move out of the project repo into a private record in the companion repo next to it (`../<project>-internal/ownership/OWNERSHIP.md`, new template `templates/OWNERSHIP-RECORD.md`). The project's `OWNERSHIP.md` keeps a `Record:` line, a new `Explain-back done` date, the hand-changed commit and the re-check dates (D26). A project already under the skill must move its answers and add the two lines.
 - `check_gates.py`: reads the answers from the private record, fail-closed. From Stage 5 on, a record that cannot be read (missing, a folder, not UTF-8) fails and is reported as "could not be read", apart from a readable record without answers. An absolute `Record:` path, or one inside the project, is refused. An answer section in the project's `OWNERSHIP.md` is refused at every stage.
 - `check_gates.py --private-unavailable`: for CI, where the companion is never present; only the unreadable case becomes a printed `NOT CHECKED` note. The project CI template runs the stage gate with it.

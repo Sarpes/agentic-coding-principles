@@ -1,7 +1,7 @@
 {
   "name": "agentic-engineering-principles",
   "description": "A conductor for building software with an AI coding agent: eight stages with evidence-based gates, a test ladder, a go-live review, recorded overrides, and a closed-book round that shows the owner can explain the project. Works hand in hand with installed skills and uses a stated fallback when one is missing.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Sarp Esenyel"
   },
