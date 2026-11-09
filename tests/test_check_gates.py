@@ -2623,6 +2623,46 @@ class EvidenceCellRules(GitCase):
         self.assertTrue(any("columns" in m for m in check_gates.ledger_problems(text)))
 
 
+class RungCellRules(GitCase):
+    """A rung cell must name test evidence: the gate's own records, ARCHITECTURE.md and empty files are not."""
+
+    def setUp(self):
+        self.root = self.make_repo({"README.md": "# p\n", "ARCHITECTURE.md": "# a\n", "STAGES.md": STAGES_OPEN,
+                                    "OVERRIDES.md": "# o\n", "docs/archive/STAGES-cycle-1.md": STAGES_OPEN,
+                                    "tests/test_a.py": "import unittest\n", "tests/test_empty.py": "",
+                                    "tests/test_blank.py": "  \n"})
+        self.tracked = set(ls(self.root))
+
+    def rung(self, cell):
+        return check_gates._rung_problem(cell, self.root, self.tracked)
+
+    def test_the_gate_records_and_the_architecture_file_are_refused(self):
+        for cell in ("STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "docs/archive/STAGES-cycle-1.md"):
+            with self.subTest(cell=cell):
+                self.assertIn("cannot be rung evidence", self.rung(cell) or "")
+
+    def test_an_empty_tracked_file_is_refused(self):
+        for cell in ("tests/test_empty.py", "tests/test_blank.py"):
+            with self.subTest(cell=cell):
+                self.assertIn("cannot be rung evidence", self.rung(cell) or "")
+
+    def test_a_tracked_test_file_still_counts(self):
+        self.assertIsNone(self.rung("tests/test_a.py"))
+        self.assertIsNone(self.rung("tests/test_a.py::test_one"))
+
+    def test_n_a_with_a_reason_still_counts(self):
+        self.assertIsNone(self.rung("n/a: reads a file only"))
+
+    def test_a_refused_file_beside_a_real_test_file_counts_for_the_test_file(self):
+        self.assertIsNone(self.rung("STAGES.md, tests/test_a.py"))
+
+    def test_the_review_row_naming_the_gate_files_is_refused(self):
+        doc_text = doc(tests=[trow("REQ-1", "ARCHITECTURE.md", "STAGES.md", "README.md", "README.md", "README.md")])
+        problems = tt_problems(doc_text, "full", {"REQ-1"}, {}, ls(self.root), self.root, {})
+        self.assertEqual(sorted(m.split(":")[1].strip() for m in messages(problems) if "cannot be rung" in m),
+                         ["rung 1 (Written first)", "rung 2 (Catches breakage)"], problems)
+
+
 class OverrideSurvivorRules(GitCase):
     def test_the_last_duplicate_field_wins(self):
         text = "### O1. t\n\n- **Status:** open\n- **Status:** closed\n"
