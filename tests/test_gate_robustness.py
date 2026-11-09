@@ -61,7 +61,7 @@ AI_LOG = "# AI log\n\n### 1. Title\n\n## Retro\n\nThree mistakes became two rule
 OVERRIDES_SEED = ("# Overrides\n\n### O1. Skip a review\n\n- **Date:** 2026-01-01\n- **Stage:** 3 Build\n"
                   "- **What was skipped:** the second review\n- **Why:** time\n- **Risk accepted:** a bug\n"
                   "- **How to close:** review it\n- **Status:** open\n- **Closing evidence:** -\n"
-                  "- **Re-confirmed for release:** -\n")
+                  "- **Re-confirmed for release:** 2026-01-02\n")
 
 
 class GateRobustness(unittest.TestCase):
@@ -71,13 +71,14 @@ class GateRobustness(unittest.TestCase):
         cls.addClassCleanup(cls.helper.doCleanups)
         extra = {"requirements.txt": "flask==3.0.0\n",
                  "pyproject.toml": "[project]\nname = \"p\"\ndependencies = [\"requests==2.0.0\"]\n",
-                 "package.json": "{\"dependencies\": {\"left-pad\": \"1.3.0\"}}\n"}
+                 "package.json": "{\"dependencies\": {\"left-pad\": \"1.3.0\"}}\n",
+                 "AI-Agents.md": AI_LOG}
         golive = gate_tests.golive_ok(["C-SEC-1", "C-WEB-1", *[f"ATK-{i}" for i in range(1, 6)]])
         cls.root = cls.helper.project(size="full", comps=("Parser",), golive=golive, extra=extra,
                                       deps=["flask 3.0.0", "requests 2.0.0", "left-pad 1.3.0"], overrides=OVERRIDES_SEED)
         stages = (cls.root / "STAGES.md").read_text(encoding="utf-8")
         stages = stages.replace("| 7 Retro | open | - | - |", PASSED_STAGE_7)
-        gate_tests.commit(cls.root, {"STAGES.md": stages, "AI-Agents.md": AI_LOG}, "retro")
+        gate_tests.commit(cls.root, {"STAGES.md": stages}, "retro")
         cls.seeds = {}
         for name in ("STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "REQUIREMENTS.md", "DECISIONS.md",
                      "BUILD-LEDGER.md", "GO-LIVE.md", "OWNERSHIP.md", "AI-Agents.md", "RESULTS.md",
@@ -194,7 +195,9 @@ class GateRobustness(unittest.TestCase):
 
     def test_the_untouched_project_is_clean(self):
         """The control: the base project has no problems, so a problem later comes from the generated file."""
-        self.assertEqual(check_project(self.root, TODAY), ([], []))
+        problems, notes = check_project(self.root, TODAY)
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, ["open override O1 (stage 3 Build): see OVERRIDES.md"])
 
     def test_the_generator_changes_files_and_covers_every_kind(self):
         """A generator that returned the seed unchanged would pass the crash test for nothing."""
