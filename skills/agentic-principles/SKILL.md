@@ -36,7 +36,7 @@ Say in plain words, in this order: what the stage is for; the evidence that will
 - **`passed`:** the evidence is named in `STAGES.md` and `python checks/check_gates.py` exits 0. Show the owner the command and its exit code.
 - **`overridden`:** only through an override the owner makes knowingly:
   1. Tell the owner, in one or two plain sentences, what would be skipped and what could go wrong.
-  2. Ask why, and write the owner's own words into the new `OVERRIDES.md` entry (`Why`, `Risk accepted`). Never invent them.
+  2. Ask why, and write the owner's own words into the new `OVERRIDES.md` entry (`Why`, `Risk accepted`). Never invent them. On Small, setup does not create `OVERRIDES.md`: at the first override, copy `templates/OVERRIDES.md` from the folder `--where` printed into the project first.
   3. Status `open`; `Re-confirmed for release` stays `-` until Stage 5, where the owner re-confirms it.
   4. Set the stage to `overridden` with the override id.
 - **"Just mark it passed, no override":** refuse plainly and kindly. `passed` is a statement that evidence exists; the owner may skip work, but cannot make a missing file exist. Offer the two real paths: do the work, or a one-minute override.

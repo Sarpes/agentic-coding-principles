@@ -254,7 +254,7 @@ The scripts climb the ladder themselves: each rule is removed on a throwaway cop
 
 Tests: every check has a case that must fire and a look-alike that must not. A test validates `companions.json` (every stage covered, every entry has a fallback), and a checker reports companions that are not installed. The skill's instructions are tested the way `superpowers:writing-skills` prescribes, with scenarios that pressure an agent to skip a gate, including the owner saying "just close it", the agent answering Stage 6 for the owner, and choosing Small to escape; each is run more than once.
 
-Acceptance, required before release: with the skill already linked, a fresh session that has not seen this design adopts the past project named in section 4 at the commit before that project's final review, runs the go-live review, and reports. It must find all the known problems listed in section 9, and misses and false alarms are reported as raw counts. Those problems are not written into the skill's own files as an answer key. Details that would identify the project are recorded only in the private companion repository. The owner's full Stage 6 on that project follows the release, in its own session, so that no deadline rushes the understanding; the first new project run from intake to retro also follows the release.
+Acceptance, required before release: with the skill already linked, a fresh session that has not seen this design adopts the past project named in section 4 at the commit before that project's final review, runs the go-live review, and reports. It must find all the known problems listed in section 9, and misses and false alarms are reported as raw counts. Those problems are not written into the skill's own files as an answer key. Details that would identify the project are recorded privately, outside this repository. The owner's full Stage 6 on that project follows the release, in its own session, so that no deadline rushes the understanding; the first new project run from intake to retro also follows the release.
 
 ## 12. Decided and left to the builder
 
@@ -267,7 +267,7 @@ The designer's calls, open to correction:
 - `diagnosing-bugs` as primary over `systematic-debugging`, for its stricter definition of a usable failing check;
 - one independent review kept in normal mode;
 - the definition of a part, the timing of each check, the override line, and the manifest list in sections 6 and 11;
-- the go-live acceptance run uses that past project at the commit before its final review, must find all four known problems, and is recorded only in the private companion repository;
+- the go-live acceptance run uses that past project at the commit before its final review, must find all four known problems, and is recorded privately, outside this repository;
 - a passed re-check date is a reminder and not a script failure;
 - the limits of 10 source files and 10 files per folder entry, and the minimum attack counts;
 - the separate session that drafts attacks and grades answers is a fresh agent, recorded on trust;

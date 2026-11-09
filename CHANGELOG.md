@@ -12,6 +12,7 @@ All notable changes to this project are recorded here.
 - `principles/`: the enforcement kind "contract hook (planned, v0.2)" is now "contract hook (planned)".
 - `tests/test_readme.py`: the README must name exactly the plugins in `companions.json`.
 - `docs/design.md`: the anti-goal about rules without an incident is marked as narrowed to principles (D16).
+- GitHub Actions: macOS joins the test matrix, so the tests run on Ubuntu, Windows and macOS (D21).
 
 ## [0.1.1] - 2026-11-08
 

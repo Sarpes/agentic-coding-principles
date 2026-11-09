@@ -22,7 +22,7 @@ If the owner says "you know it better, fill it in", say no plainly, and offer to
 |---|---|---|
 | Reading an existing codebase function by function, for the agent's preparation (adoption; needs the Workflow tool) | `audit-context-building:audit-context-building` | the agent walks the file map with the owner |
 
-That companion prepares the agent; it does not teach the owner, who still does this round. Its `audit-context/` folder is git-ignored.
+That companion prepares the agent; it does not teach the owner, who still does this round. It writes an `audit-context/` folder: add `audit-context/` to the project's `.gitignore` before running it, so its notes are not committed.
 
 ## Gate
 

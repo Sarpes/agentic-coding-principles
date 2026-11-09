@@ -6,7 +6,7 @@ Terms. A *mutation* is one small deliberate change to the source (a rule removed
 
 ## Setup
 
-- Machine and versions: one Windows 11 computer, Python 3.13 (the project supports 3.11 and newer), git 2.x, standard library only. Date of the runs: 2026-11-09.
+- Machine and versions: one Windows 11 computer, Python 3.13 (the project supports 3.11 and newer), git 2.54.0 (the Windows build), standard library only. Date of the runs: 2026-11-09.
 - Garbage input: `tests/test_gate_robustness.py`, fixed seed 20261109. The test builds one real temporary git repository holding a complete project (every stage passed, so every check is reached), then, for each of 15 file types, rewrites that one file with a generated document and calls `check_project`. Nine kinds of document, taken in turn: random bytes; a prefix cut at any byte (including inside a multi-byte character); truncated tables; very long lines (1,000 to 60,000 repeats); lines of only `|`; non-ASCII characters; CRLF, bare CR and a byte-order mark; shuffled and doubled lines; and random lines made from the rules' own vocabulary (`Size:`, `file:`, `### O1.`, `Override: O1`, and so on). A run passes when it returns `(problems, notes)` and nothing is raised, and when it finishes within 5 seconds. The same generator feeds `check_companions.py` with 100 generated settings files.
 - Rules removed on a copy: a script kept outside this repository copies the repository into 12 to 14 working folders, applies one mutation to `check_gates.py` in a folder, runs `python -m unittest -f tests.test_check_gates` there, and restores the file. 179 mutations in all, over 94 functions and rule tables of `check_gates.py`: every function that makes a decision or reads a file, plus the rule tables (`REQUIRED`, `CONTENT_RULES`, `TRAIT_RULES` and the numeric limits). The kinds of change: a condition replaced by `False` or `True`, a branch removed, a comparison flipped (`==` to `!=`, `>` to `>=`), a character class or regular expression loosened, a constant changed by one, an entry removed from a table. The repository itself was never modified by this script.
 - Clean clone: `git clone` of this repository from its local path into an empty folder, `git checkout` of the working branch, then only the commands the documentation names (`python -m unittest -v` from README.md and CLAUDE.md, `python checks/check_docs.py` from CLAUDE.md).
@@ -57,12 +57,13 @@ One more near miss worth keeping: a mutation of `main` (removing the "not a dire
 | `python checks/check_docs.py` | exit 0 | exit 0 | 1 of 1 |
 
 The clone was made from the local repository path into an empty folder, then `git checkout test/gates-ladder` (commit `bfe32b7`, the last commit before this file); `git status` in the clone showed 0 changed files before the run. Nothing was installed and no file was copied in by hand.
+
 ## Observations
 
 - Hangs, not tracebacks, were what generated text found in `check_gates.py`: 0 exceptions in 7,500 runs, but 1 input shape that made time grow with the square of the length. The garbage test therefore also times each run.
 - The first mutation pass had 46 survivors in 178 (26%), so the 771 tests that existed before this work were thorough about the main rules and thin about the helpers (text splitting, git helpers, date parsing, ordering of output). Most survivors were in those helpers.
 - Five of the survivors were in code that the first mutation list did not include at all (the git helpers); adding them found real gaps (a tag object counted as a later commit; non-ASCII source names). A mutation list written from the rules misses what the rules stand on.
-- The mutation count is a measurement of this suite against these 179 changes, not a proof that no defect exists. The 180 are a sample chosen by the author of this measurement, and the list lives outside the repository, so someone else cannot rerun exactly the same list from the repository alone.
+- The mutation count is a measurement of this suite against these 179 changes, not a proof that no defect exists. The 179 are a sample chosen by the author of this measurement, and the list lives outside the repository, so someone else cannot rerun exactly the same list from the repository alone.
 - At 100 documents per type the garbage test runs in about 35 s; at 500 per type, the number the design asks for, it runs in 161 s. The default is 100 so that the whole suite stays near 4 minutes; set `ROBUSTNESS_PER_TYPE=500` to run the full count.
 - The sample is also bounded by the generator: documents are one file at a time against an otherwise valid project, so a defect that needs two files to be wrong in a specific combination is not searched for.
 

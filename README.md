@@ -19,7 +19,7 @@ The aim, in the owner's words: every part is tested to its limits, and a month l
 
 | Stage | Gate (evidence needed to move on) | Principles |
 |---|---|---|
-| 0 Intake | Requirements matrix exists; facts (dates, quotas, prices) carry their source | [00-intake.md](principles/00-intake.md) |
+| 0 Intake | Requirements matrix (`REQUIREMENTS.md`) and attack list (`ATTACKS.md`) exist; facts (dates, quotas, prices) carry their source | [00-intake.md](principles/00-intake.md) |
 | 1 Design | Written design approved by the human; decisions logged with rejected options | [01-design.md](principles/01-design.md) |
 | 2 Plan | Every task has a definition of done | [02-plan.md](principles/02-plan.md) |
 | 3 Build | Each task red-first, green, reviewed by a separate reviewer | [03-build.md](principles/03-build.md) |
@@ -48,7 +48,7 @@ ln -s <clone>/skills/agentic-principles ~/.claude/skills/agentic-principles
 mklink /J "%USERPROFILE%\.claude\skills\agentic-principles" "<clone>\skills\agentic-principles"
 ```
 
-The first line is for macOS and Linux. On Windows, `ln -s` in Git Bash may copy the folder instead of linking it when the account lacks the right to create symbolic links, so Windows users should use the second line. The second for the Windows command prompt, where `mklink /J` makes a junction (a folder link). Any folder or link inside `~/.claude/skills` loads as a skill, so keep backups outside it. The skill finds the principles, checklist and templates in the clone; `init_project.py --where` prints where it found them.
+The first line is for macOS and Linux. On Windows, `ln -s` in Git Bash may copy the folder instead of linking it when the account lacks the right to create symbolic links, so Windows users should use the second line. The second line is for the Windows command prompt, where `mklink /J` makes a junction (a folder link). Any folder or link inside `~/.claude/skills` loads as a skill, so keep backups outside it. The skill finds the principles, checklist and templates in the clone; `init_project.py --where` prints where it found them.
 
 **Start a project.** Open the agent in the project folder and ask it to run the project under the agentic principles. It recommends a size and a build method; you choose both:
 
@@ -56,7 +56,7 @@ The first line is for macOS and Linux. On Windows, `ln -s` in Git Bash may copy 
 - **Full**: everything else.
 - **Build method**: *normal* (one session works through the plan, with one independent review at the end) or *sub-agent* (a sub-agent is a separate AI session given one job: a writer and a separate reviewer per task).
 
-The skill then runs `init_project.py`, which copies the templates and the gate scripts into the project, writes a marked block into the project's `CLAUDE.md` (so the skill is loaded in every later session) and adds the checks to the project's continuous integration (CI: a service that runs the tests and checks automatically on every push). Without the agent, the same checks run as `python checks/check_gates.py` and `python checks/check_docs.py .` (Python 3.11 or newer, standard library only; exit code 0 means no problems, 1 lists them).
+The skill then runs `init_project.py`, which copies the templates and the gate scripts into the project, writes a marked block into the project's `CLAUDE.md` (so the skill is loaded in every later session) and adds the checks to the project's continuous integration (CI: a service that runs the tests and checks automatically on every push). Without the agent, the same checks run as `python checks/check_gates.py` and `python checks/check_docs.py .` (Python 3.11 or newer, standard library only; exit code 0 means no problems, 1 lists them, 2 means the folder cannot be checked, for example because it is not the top of a git repository or is a shallow clone).
 
 An existing project can be adopted at whatever stage it has really reached. Earlier stages are marked `adopted`, which means "not done under this skill", never "passed".
 
@@ -129,7 +129,7 @@ The plugin `anthropic-skills` is not installable as a plugin here. It is provide
 
 ## How it is tested
 
-`python -m unittest -v` runs the tests in [tests/](tests/): the documentation checker, the stage-gate script, the project setup script, the companion mapping, the checklist, the templates, the principles and this README. GitHub Actions runs the tests and then the gate on this repository, on Python 3.11 and 3.13, on Ubuntu and Windows.
+`python -m unittest -v` runs the tests in [tests/](tests/): the documentation checker, the stage-gate script, the project setup script, the companion mapping, the checklist, the templates, the principles and this README. GitHub Actions runs the tests and then the gate on this repository, on Python 3.11 and 3.13, on Ubuntu, Windows and macOS.
 
 The checks in `tests/` are written with a case that must fire and a look-alike that must not. The gate can fail: `test_cli_exit_1_on_broken_repo` in [tests/test_check_docs.py](tests/test_check_docs.py) builds a broken repository in a temporary directory at run time and expects exit code 1. The pre-commit secret gate in [.githooks/](.githooks/) is tested the same way with a temporary git repository and a key-like line made at run time. A test compares the plugins named in this README with `companions.json`, so the two cannot drift apart. One test that scans for private names is skipped in CI because it needs a local environment variable; this is expected.
 
