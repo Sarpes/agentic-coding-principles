@@ -2031,18 +2031,47 @@ class GoLiveTiming(GitCase):
 
     # ---- the go-live review
     def test_stage_5_evidence_must_name_go_live_when_rows_are_required(self):
-        root = self.project(stage5="file:OWNERSHIP.md")
+        root = self.project(stage5="file:OWNERSHIP.md", traits_line="scheduled")
         problems = self.only(root, "STAGES.md")
         self.assert_mentions(problems, "GO-LIVE.md")
 
     def test_a_missing_attack_row_is_reported_at_stage_5(self):
-        root = self.project(golive=golive_ok(["C-SEC-1", "ATK-1", "ATK-3"]))
+        root = self.project(golive=golive_ok(["C-SEC-1", "ATK-1", "ATK-3"]), traits_line="scheduled")
         self.assert_mentions(self.only(root, "GO-LIVE.md"), "ATK-2")
 
     def test_an_unresolved_row_is_reported_at_stage_5(self):
         rows = [("r", "v", i, "proven", "ran x") for i in ("C-SEC-1", "ATK-1", "ATK-2")]
-        root = self.project(golive=gl_rows(*rows, ("r", "v", "ATK-3", "open", "")))
+        root = self.project(golive=gl_rows(*rows, ("r", "v", "ATK-3", "open", "")), traits_line="scheduled")
         self.assert_mentions(self.only(root, "GO-LIVE.md"), "unresolved")
+
+    # ---- which projects need the go-live file (design section 4)
+    def test_small_with_no_traits_does_not_need_go_live_in_the_evidence(self):
+        root = self.project(stage5="file:OWNERSHIP.md")
+        self.assertEqual(self.only(root, "STAGES.md"), [])
+
+    def test_small_with_no_traits_is_not_judged_on_a_go_live_file_it_happens_to_have(self):
+        root = self.project(golive=gl_rows(("r", "v", "ATK-1", "open", "")))
+        self.assertEqual(self.only(root, "GO-LIVE.md"), [])
+
+    def test_small_declared_none_does_not_need_go_live(self):
+        root = self.project(stage5="file:OWNERSHIP.md", traits_line="none")
+        self.assertEqual(self.only(root, "STAGES.md"), [])
+
+    def test_small_with_a_detected_trait_still_needs_go_live(self):
+        root = self.project(stage5="file:OWNERSHIP.md", extra={"crontab": "0 1 * * * run\n"})
+        self.assert_mentions(self.only(root, "STAGES.md"), "GO-LIVE.md")
+
+    def test_full_with_no_traits_still_needs_go_live(self):
+        root = self.project(size="full", stage5="file:OWNERSHIP.md", rounds=fr_rows(3))
+        self.assert_mentions(self.only(root, "STAGES.md"), "GO-LIVE.md")
+
+    def test_small_with_no_traits_still_has_its_attacks_checked_in_the_test_table(self):
+        root = self.project(stage5="file:OWNERSHIP.md")
+        text = (root / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        kept = "".join(line for line in text.splitlines(keepends=True) if not line.startswith("| ATK-2 |"))
+        self.assertNotEqual(kept, text)
+        commit(root, {"ARCHITECTURE.md": kept}, "drop one attack row")
+        self.assert_mentions(self.only(root, "ARCHITECTURE.md"), "ATK-2")
 
     def test_the_go_live_file_is_not_judged_before_stage_5_is_passed(self):
         root = self.project(through=4, golive=gl_rows(), checklist=None)
@@ -2207,6 +2236,22 @@ class GoLiveCommand(GitCase):
         code, out, _ = run_main(["--go-live", str(root)])
         self.assertEqual(code, 0)
         self.assertIn("traits: none", out.splitlines())
+
+    def test_small_with_no_traits_is_told_the_file_is_not_required(self):
+        root = self.make_repo({"STAGES.md": table(), "ATTACKS.md": THREE_ATTACKS,
+                               "checks/checklist.json": CHECKLIST_OK})
+        code, out, _ = run_main(["--go-live", str(root)])
+        self.assertEqual(code, 0)
+        self.assertIn("required ids (0):", out.splitlines())
+        self.assertIn("GO-LIVE.md is not required", out)
+        self.assertNotIn("ATK-1", out.split())
+
+    def test_small_with_a_declared_trait_still_lists_the_ids(self):
+        root = self.make_repo({"STAGES.md": table(extra=("Traits: scheduled",)), "ATTACKS.md": THREE_ATTACKS,
+                               "checks/checklist.json": CHECKLIST_OK})
+        out = run_main(["--go-live", str(root)])[1]
+        self.assertIn("ATK-1", out.split())
+        self.assertNotIn("not required", out)
 
     def test_not_a_directory_or_too_many_arguments_exit_2(self):
         self.assertEqual(run_main(["--go-live", str(ROOT / "nope-folder")])[0], 2)

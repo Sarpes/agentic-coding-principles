@@ -161,3 +161,27 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The first version of the setup script handled the new-cycle risk with a printed note, which enforced nothing; the review caught it. Also, an existing test restarted the stage file with the same number and kept passing under the new rule only after I gave it a new number, and a heredoc turned a newline escape in a test into a real newline, which I saw when I read the file back.
+
+### 21. The skill: router, stage files and plugin manifests (2026-11-09)
+
+- **Prompt (or summary of it):** Write the skill that conducts a project through the eight stages, test-first and following the skill-writing method: failing file tests, pressure scenarios on fresh sub-agents without the skill, then the router, eight stage files and the plugin manifests, then the same scenarios with the skill.
+- **What the AI produced:** 18 file tests in a first commit (1 failure and 37 errors against nothing), a router of 93 lines, eight stage files, two manifests at version 0.2.0, and a description worded around staged gates so it does not compete with the repository-starting skill. Scenario runs: 20 without the skill and 14 with it (7 scenarios, twice each); all 14 held. Raw output is kept out of this repository.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first scenario projects cited unfilled templates as evidence, so the gate failed and gave each test subject a second reason to stop; most of the first baseline therefore looked fine, and rebuilding three projects with adopted stages exposed the real failures. A draft of the go-live step listed the kinds of risk to look for and came close to giving away the acceptance test's answers; I saw that on rereading and removed it. One of 24 rules broken on a throwaway copy survived at first because my change missed a capitalised "By hand", so the fault was in the change and not the test. Scenario sub-agents were told to read the skill, so nothing here shows that the description or the project block loads it.
+
+### 22. Review round on the skill (2026-11-09)
+
+- **Prompt (or summary of it):** Fix seven review findings: treat the companion report as a hint, state the start order, make the trigger check's proof real, run the gate at session start, keep design answers in the owner's words, explain seven terms in plain words, and repeat the "just close it" scenario with a passing gate.
+- **What the AI produced:** 5 failing tests in a first commit, then the router and stage file changes, and two new scenario runs on a project whose gate exits 0; both held.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The test that was meant to prove the trigger check could fire compared a string with itself, so it proved nothing; the review caught it. The Stage 5 file said a Small project needs the go-live file only when traits are detected, but the gate also asks for it when no trait is detected, because some checklist items always apply; building the passing-gate project showed this, and the file now states what the gate does.
+
+### 23. Second review round: the go-live template and the Small rule (2026-11-09)
+
+- **Prompt (or summary of it):** Take the acceptance test's expected findings out of the go-live template by giving it an unrelated worked example, search the skill, templates and checklist for the same phrases, and make the gate stop requiring the go-live file on a Small project with no traits, as the design says.
+- **What the AI produced:** 8 new gate tests in a first commit (4 red; the firing cases and the guard passed from the start, and 3 existing tests now declare a trait), then a single function deciding when the go-live file is needed, used by both the gate and the listing command, a new worked example in the template, and the matching Stage 5 line.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The previous round changed the Stage 5 line to match the gate, although the design outranks the code; the review ruled the other way, so the gate changed and the line went back. The template still carried the acceptance test's expected findings until the previous round's report named them.
