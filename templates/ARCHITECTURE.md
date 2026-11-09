@@ -1,13 +1,13 @@
 # Architecture
 
 <!--
-How the project is built, written stage by stage and finished before release. check_gates.py reads three of
+How the project is built, written stage by stage and finished before release. check_gates.py reads four of
 its sections; keep the headings and the table columns exactly. The rows below are worked examples, marked
 (EXAMPLE): replace them and remove the marker. check_gates.py refuses this file as evidence while the marker
 remains.
 
-When each check binds (once the stage is marked passed): the Tests section at stage 4 Verify; the File map and
-Dependencies sections at stage 5 Ship.
+When each check binds (once the stage is marked passed): the Components and Tests sections at stage 4 Verify;
+the File map and Dependencies sections at stage 5 Ship. The Components table must hold at least one row.
 
 Any checked section may carry a line "Override: O<n>" naming an open entry in OVERRIDES.md for that stage; the
 check is then reported as overridden and not as failed.

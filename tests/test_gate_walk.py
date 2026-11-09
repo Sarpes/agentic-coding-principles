@@ -188,9 +188,10 @@ class Walk:
         log = log.rstrip("\n") + "\n\nThe one mistake became a rule: check install claims in a clean environment.\n"
         self.stage(7, "file:AI-Agents.md", {"AI-Agents.md": log}, "stage 7 Retro")
 
-    def run(self):
+    def run(self, steps=None):
         self.assert_clean("right after init")
-        for step in (self.intake, self.design, self.plan, self.build, self.verify, self.ship, self.own, self.retro):
+        for step in (steps or (self.intake, self.design, self.plan, self.build, self.verify, self.ship, self.own,
+                               self.retro)):
             step()
 
 
@@ -200,6 +201,16 @@ class GateWalk(unittest.TestCase):
 
     def test_a_full_project_filled_in_from_the_templates_passes_every_stage(self):
         Walk(self, "full").run()
+
+    def test_a_walked_project_whose_components_rows_are_deleted_is_refused(self):
+        """Deleting the Components rows used to drop every component from the ladder and the full round silently."""
+        walk = Walk(self, "full")
+        walk.run((walk.intake, walk.design, walk.plan, walk.build, walk.verify))
+        text = read(walk.root, "ARCHITECTURE.md")
+        stripped = "\n".join(line for line in text.split("\n") if not line.startswith("| Adder |"))
+        commit(walk.root, {"ARCHITECTURE.md": stripped}, "components deleted")
+        problems, _ = check_gates.check_project(walk.root, TODAY)
+        self.assertTrue(any("Components" in p.message for p in problems), problems)
 
 
 class ReplaceExamplesHelper(unittest.TestCase):
