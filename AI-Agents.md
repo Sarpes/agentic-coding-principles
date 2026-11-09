@@ -177,3 +177,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The test that was meant to prove the trigger check could fire compared a string with itself, so it proved nothing; the review caught it. The Stage 5 file said a Small project needs the go-live file only when traits are detected, but the gate also asks for it when no trait is detected, because some checklist items always apply; building the passing-gate project showed this, and the file now states what the gate does.
+
+### 23. Second review round: the go-live template and the Small rule (2026-11-09)
+
+- **Prompt (or summary of it):** Take the acceptance test's expected findings out of the go-live template by giving it an unrelated worked example, search the skill, templates and checklist for the same phrases, and make the gate stop requiring the go-live file on a Small project with no traits, as the design says.
+- **What the AI produced:** 8 new gate tests in a first commit (4 red; the firing cases and the guard passed from the start, and 3 existing tests now declare a trait), then a single function deciding when the go-live file is needed, used by both the gate and the listing command, a new worked example in the template, and the matching Stage 5 line.
+- **What I kept:** None: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The previous round changed the Stage 5 line to match the gate, although the design outranks the code; the review ruled the other way, so the gate changed and the line went back. The template still carried the acceptance test's expected findings until the previous round's report named them.

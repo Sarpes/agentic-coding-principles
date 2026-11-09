@@ -18,8 +18,8 @@ Columns, in this order:
   Evidence    proven: the command that was run and its result. not applicable: the reason. overridden: the
               override id (for example O2), an open entry in OVERRIDES.md for stage 5.
 
-Add your own rows for risks the lists do not name. Typical findings from past projects: a container running as
-root, a port open on every network interface, no graceful stop, documents that contradict the code.
+Add your own rows for risks the lists do not name, for example a nightly export that fills the disk, or a discount
+code that can be used twice.
 
 The rows below are worked examples, marked (EXAMPLE): replace them and remove the marker. check_gates.py refuses
 this file as evidence while the marker remains.
@@ -27,6 +27,6 @@ this file as evidence while the marker remains.
 
 | Risk | Validation | Source | Status | Evidence |
 |---|---|---|---|---|
-| The container runs as root. (EXAMPLE) | Start it and print the user it runs as. | C-SEC-1 | proven | ran `docker run image id -u`: printed 1000, not 0 |
+| A negative quantity makes an order total negative. (EXAMPLE) | Submit an order with quantity -1 and read the total. | C-SEC-5 | proven | ran tests/test_orders.py: 4 of 4 passed, a negative quantity is refused |
 | A record with quotes and newlines breaks the parser. (EXAMPLE) | Feed it the hostile record from the attack list. | ATK-1 | proven | ran tests/test_hostile.py: 6 of 6 passed, the record is stored unchanged |
-| The service listens on every network interface. (EXAMPLE) | List the open ports from another machine. | proposed for this project | not applicable | it is a command line tool and opens no port |
+| The nightly export fills the disk. (EXAMPLE) | Run the export on a year of orders and compare the free space before and after. | proposed for this project | not applicable | the export replaces one file of at most 2 MB each night |

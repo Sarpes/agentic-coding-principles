@@ -38,4 +38,4 @@ Give the code-review companion the base branch and the path of the design or pla
 
 ## Small
 
-The explain-back still has its three questions. `GO-LIVE.md` is required whenever `check_gates.py --go-live` lists a required id. Setup does not copy it on Small, so copy it from `templates/` when it is needed.
+The explain-back still has its three questions. `GO-LIVE.md` is required only if the project has a detected or declared trait; `check_gates.py --go-live` says so. Setup does not copy it on Small, so copy it from `templates/` when it is needed.

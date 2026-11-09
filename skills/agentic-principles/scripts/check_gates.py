@@ -1505,8 +1505,15 @@ def go_live_ownership_problems(root, tracked, stages, overrides, today: date):
     return problems + (found if passed(5) or passed(6) else []), notes
 
 
+def go_live_required(stages, traits) -> bool:
+    """False only for a Small project with no detected or declared trait (design section 4)."""
+    return not (stages.size == "small" and not traits)
+
+
 def _go_live_stage_problems(root, tracked, stages, overrides, traits) -> list[Problem]:
     checklist, problems = load_checklist(root)
+    if not go_live_required(stages, traits):
+        return problems
     attacks, _ = _load(root, ATTACKS_FILE)
     required = required_go_live_ids(traits, checklist, attack_ids(attacks or ""))
     if not required:
@@ -1532,10 +1539,13 @@ def go_live_report(root: Path) -> tuple[list[str], list[str]]:
     traits, _ = _project_traits(root, tracked, stages)
     checklist, found = load_checklist(root)
     attacks, _ = _load(root, ATTACKS_FILE)
-    required = required_go_live_ids(traits, checklist, attack_ids(attacks or ""))
+    needed = go_live_required(stages, traits)
+    required = required_go_live_ids(traits, checklist, attack_ids(attacks or "")) if needed else set()
     natural = lambda ident: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", ident)]   # noqa: E731
     out = ["traits: " + (", ".join(sorted(traits)) or "none"), f"required ids ({len(required)}):"]
     out += [f"  {ident}" for ident in sorted(required, key=natural)]
+    if not needed:
+        out.append(f"{GO_LIVE_FILE} is not required: this is a Small project with no traits")
     err = [f"{p.file}: {p.message}; only the attack ids are listed" for p in found]
     return out, err
 
