@@ -217,3 +217,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** The rename everywhere, the logo at the top of the README, and the short skill name `agentic-principles`.
 - **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** Its first edit of CLAUDE.md added a note "renamed from" the old name, which the new test immediately flagged; the history moved to D24, where it belongs.
+
+### 28. Installing the plugin and writing how to use it (2026-11-09)
+
+- **Prompt (or summary of it):** Install the skill; then, since others need clearer instructions, add to the README how the skill is used from one session to the next.
+- **What the AI produced:** It installed the plugin from the marketplace and checked that the installed copy finds its own files. It then wrote failing tests for a quick start, a daily-use section and a current install note, followed by the two README sections, D25 and a changelog line.
+- **What I kept:** The quick start before the stage table, the table of sentences the owner can say, the table of record files, and the list of things the agent never writes for the owner.
+- **What I changed or rejected, and why:** None: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** No new error in this step. The README it had written earlier explained the stages but not the daily routine; the owner noticed that the instructions were not clear enough for others, which prompted this step.

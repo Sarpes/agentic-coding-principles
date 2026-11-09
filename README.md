@@ -19,6 +19,26 @@ It is written for people who build software with an AI coding agent and are not 
 
 The aim, in the owner's words: every part is tested to its limits, the owner can explain the architecture, each file, the tech stack, how each part was tested and every third-party dependency, without the agent.
 
+## Quick start
+
+1. **Install the plugin once.** In Claude Code:
+
+   ```
+   /plugin marketplace add Sarpes/agentic-engineering-principles
+   /plugin install agentic-engineering-principles@agentic-engineering-principles
+   ```
+
+   Then start a new session; a running session does not pick up a new skill.
+
+2. **Open the agent in your project folder** and say one sentence:
+
+   - New work: *"Start this project under the agentic principles."*
+   - Code that already exists: *"Adopt this project under the agentic principles."*
+
+3. **Answer two questions.** The agent recommends a size (Small or Full) and a build method (normal or sub-agent) and explains why; you choose. It then creates the record files and opens Stage 0.
+
+From then on you do not call the skill again: the project's `CLAUDE.md` names it, so every later session in that folder loads it and picks up where the last one stopped. [Using it day to day](#using-it-day-to-day) says what happens in each session.
+
 ## The eight stages
 
 | Stage | Gate (evidence needed to move on) | Principles |
@@ -43,7 +63,7 @@ The index, with the four-part format of a principle and the kinds of enforcement
 /plugin install agentic-engineering-principles@agentic-engineering-principles
 ```
 
-This plugin has passed `claude plugin validate .` with warnings, but it has not yet been installed from the marketplace in a real session.
+This plugin passes `claude plugin validate .` with warnings and installs from the marketplace with these two commands. Whether an agent loads the skill on its own in a new session is still to be confirmed (see Limits).
 
 The plugin is called `agentic-engineering-principles`; the skill inside it keeps the short name `agentic-principles`, which is the name you will see in a session.
 
@@ -65,6 +85,55 @@ The first line is for macOS and Linux. On Windows, `ln -s` in Git Bash may copy 
 The skill then runs `init_project.py`, which copies the templates and the gate scripts into the project, writes a marked block into the project's `CLAUDE.md` (so the skill is loaded in every later session) and adds the checks to the project's continuous integration (CI: a service that runs the tests and checks automatically on every push). Without the agent, the same checks run as `python checks/check_gates.py` and `python checks/check_docs.py .` (Python 3.11 or newer, standard library only; exit code 0 means no problems, 1 lists them, 2 means the folder cannot be checked, for example because it is not the top of a git repository or is a shallow clone).
 
 An existing project can be adopted at whatever stage it has really reached. Earlier stages are marked `adopted`, which means "not done under this skill", never "passed".
+
+## Using it day to day
+
+### What every session starts with
+
+You open the agent in the project folder; you do not need to ask for anything. Before any work the agent:
+
+1. **Runs the gate check** (`python checks/check_gates.py`) and tells you what it found: problems, overrides still open, and whether an ownership re-check is due.
+2. **Checks the helper skills** (`check_companions.py`) and says out loud which ones the current stage needs and which are missing. A missing one is replaced by a recorded fallback, never skipped silently.
+3. **Opens the current stage**: the first one in `STAGES.md` that is not closed. It says in plain words what the stage is for, what evidence will close it, and which overrides are open.
+
+Then the work of that stage happens, and the agent calls the installed skills listed in [Works with these skills](#works-with-these-skills) at the right moment.
+
+### What you can say
+
+| You say | What happens |
+|---|---|
+| "Start this project under the agentic principles." | Size and method are recommended, you choose, setup runs, Stage 0 opens. |
+| "Adopt this project." | You say which stage the work has really reached; earlier stages are marked `adopted`. |
+| "Where are we?" or "What is open?" | The gate check runs and the agent reads out the current stage, its missing evidence and the open overrides. |
+| "Mark this stage passed." | It is marked `passed` only if the gate check accepts the named evidence. Otherwise the agent says what is missing. |
+| "Skip this." | The agent tells you in one or two sentences what would be skipped and what could go wrong, asks why, and writes your own words into `OVERRIDES.md`. |
+| "Show me the open overrides." | The list from `OVERRIDES.md`. Before release you re-confirm each one. |
+| "We are done; start the next piece of work." | A new cycle: the old `STAGES.md` is archived and a fresh one starts. |
+
+### Where your records live
+
+Setup copies these files into the project. They are plain text, committed with the code, and readable without the agent.
+
+| File | What it holds | Filled at |
+|---|---|---|
+| `STAGES.md` | Each stage's status (`open`, `passed`, `overridden`, `adopted`) and the evidence that closed it | Every stage |
+| `REQUIREMENTS.md` | What the software must do, as `REQ-1`, `REQ-2`, ... | 0 Intake |
+| `ATTACKS.md` | How it could be broken or misused, as `ATK-1`, `ATK-2`, ..., drafted by a separate session | 0 Intake |
+| `DECISIONS.md` | Every non-obvious choice, with the options rejected | From 1 Design on |
+| `ARCHITECTURE.md` | The parts and how they connect, a map of every file, the dependencies, and how each part was tested | Grows from 1 Design to 5 Ship |
+| `BUILD-LEDGER.md` | What was built task by task, and the reviewer's findings | 3 Build |
+| `GO-LIVE.md` | The risks your project's traits bring, each with evidence (Full size only) | 5 Ship |
+| `OWNERSHIP.md` | Your explain-back answers and the closed-book round, in your own words, with the re-check date | 5 Ship, 6 Own |
+| `OVERRIDES.md` | Every gate you chose to skip: why, and the risk you accepted (Full size; created at the first override on Small) | Any stage |
+| `GLOSSARY.md` | Every term explained to you once, so nothing is explained twice | Any stage |
+
+### What the agent will never do for you
+
+The agent never writes what only you can give: your explain-back answers, your answers in the ownership round, an approval, the reason for an override, or a re-confirmation. It offers to ask the questions instead. It also refuses "just mark it passed" when the evidence is missing: you may skip a gate through an override, but nobody can make a missing file exist.
+
+### The ownership re-check
+
+At Stage 6 you explain the project without the agent. A gap you cannot explain keeps the stage open, and a re-check is set within a week. At the next session after that date, the agent does the re-check before any other work.
 
 ## What a run looks like
 

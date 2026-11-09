@@ -242,6 +242,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** The plugin name and the skill name differ, which the README states. Released history (the 0.1.x changelog, D1 to D23, the AI log, the v0.1 design and plan) keeps the old name as written. The local folder and the private companion are renamed outside this repository.
 - **What would make you change it:** None: the owner chose the name; only a name clash on a public marketplace would reopen it.
 
+### D25. How-to-use guidance lives in the README, before the reference material
+
+- **Context:** After installing the plugin, the owner found the README explained what the project is and how a run goes, but not how a newcomer uses the skill from one session to the next: what to say, what the agent does at each session start, and where the records are kept.
+- **Options considered:** (a) a separate guide file under `docs/guides/`; (b) a quick start and a "Using it day to day" section in the README; (c) leave the README and rely on the skill explaining itself in the session.
+- **Chosen:** (b). The quick start sits right after the introduction, before the stage table; the daily-use section follows the install section.
+- **Why:** A newcomer reads the README first, often only its top. The existing README test already guards its required headings, so the new sections are kept from silently disappearing.
+- **Rejected:** (a), because a second file is easy to miss and drifts from the README; (c), because a reader decides whether to install before any session exists.
+- **Cost / trade-off:** The README grows by about sixty lines. The file table repeats names that the templates define, so a renamed template needs a README change too; the test lists the files and fails if one goes missing from the section.
+- **What would make you change it:** A README too long to scan on one screen per section, which would move the file table into a guide linked from the quick start.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

@@ -17,8 +17,10 @@ COMPANIONS = ROOT / "skills" / "agentic-principles" / "companions.json"
 SECTION = "## Works with these skills"
 PLUGIN_TOKEN = re.compile(r"^[a-z][a-z0-9-]*$")
 REQUIRED_HEADINGS = (
+    "## Quick start",
     "## The eight stages",
     "## Install and start a project",
+    "## Using it day to day",
     "## What a run looks like",
     "## The test ladder",
     "## Limits, stated openly",
@@ -203,6 +205,40 @@ class RealReadmeTests(unittest.TestCase):
                 continue
             with self.subTest(target=target):
                 self.assertTrue((ROOT / target).exists(), f"README links a missing path: {target}")
+
+
+class UsageTests(unittest.TestCase):
+    """A newcomer must find how to start before the reference material, and what each session does."""
+
+    def setUp(self):
+        self.readme = read(README)
+        self.lines = self.readme.split("\n")
+
+    def test_quick_start_comes_before_the_stage_table(self):
+        self.assertLess(self.lines.index("## Quick start"), self.lines.index("## The eight stages"))
+
+    def test_quick_start_has_the_install_commands_and_a_first_sentence(self):
+        quick = section_text(self.readme, "## Quick start") or ""
+        self.assertIn("/plugin marketplace add Sarpes/agentic-engineering-principles", quick)
+        self.assertIn("/plugin install agentic-engineering-principles@agentic-engineering-principles", quick)
+        self.assertIn("agentic principles", quick.lower())
+
+    def test_daily_use_names_what_a_session_runs_and_what_the_owner_says(self):
+        daily = (section_text(self.readme, "## Using it day to day") or "").lower()
+        for needle in ("check_gates.py", "check_companions.py", "stages.md", "overrides.md", "glossary.md",
+                       "adopt", "skip", "new cycle", "re-check", "never"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, daily)
+
+    def test_daily_use_lists_the_owner_files(self):
+        daily = section_text(self.readme, "## Using it day to day") or ""
+        for name in ("STAGES.md", "REQUIREMENTS.md", "ATTACKS.md", "ARCHITECTURE.md", "DECISIONS.md",
+                     "OVERRIDES.md", "GO-LIVE.md", "OWNERSHIP.md", "GLOSSARY.md", "BUILD-LEDGER.md"):
+            with self.subTest(name=name):
+                self.assertIn(f"`{name}`", daily)
+
+    def test_install_note_is_current(self):
+        self.assertNotIn("has not yet been installed from the marketplace", self.readme)
 
 
 class ChangelogTests(unittest.TestCase):
