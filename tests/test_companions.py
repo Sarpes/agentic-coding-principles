@@ -50,6 +50,13 @@ class TestRealMapping(unittest.TestCase):
     def test_real_file_has_no_problems(self):
         self.assertEqual(mapping_problems(self.rows), [])
 
+    def test_grilling_runs_at_intake_and_design_on_every_project(self):
+        """The owner's ruling (2026-11-10): grill-me runs in every project, Small or Full, at stage 0 and stage 1."""
+        rows = [r for r in self.rows if r["primary"] == "mattpocock-skills:grilling"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(sorted(rows[0]["stages"]), [0, 1])
+        self.assertNotIn("Full", rows[0]["capability"])
+
     def test_every_stage_zero_to_seven_is_covered(self):
         covered = {s for r in self.rows for s in r["stages"]}
         self.assertEqual(covered, set(range(8)))

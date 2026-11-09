@@ -66,9 +66,9 @@ Say in plain words, in this order: what the stage is for; the evidence that will
 | Overlap | Resolution |
 |---|---|
 | Two test-first skills | `superpowers:test-driven-development` runs the loop; `mattpocock-skills:tdd` says where tests go. Explain each proposed test location to the owner in one plain line; confirm locations at Stage 2. |
-| `superpowers:brainstorming` says "only writing-plans next" | Control returns here. On Full run `mattpocock-skills:grilling`, close Stage 1, then call `superpowers:writing-plans` at Stage 2. |
+| `superpowers:brainstorming` says "only writing-plans next" | Control returns here. Run `mattpocock-skills:grilling` (every project, Small or Full), close Stage 1, then call `superpowers:writing-plans` at Stage 2. |
 | Brainstorming offers to skip questions or sizes the work | On Full the offer is not taken; this skill's Small or Full wins. |
-| Grilling words questions so "yes" accepts its advice | On Full the owner answers in their own words. |
+| Grilling words questions so "yes" accepts its advice | The owner answers in their own words, on every project; `GRILLING.md` records the answer, not the advice. |
 | The build skills end in `superpowers:finishing-a-development-branch` | The build stops after its final review and returns to Stage 4. Finishing the branch is Stage 5. |
 | The build skills delete their workspace | Keep the workspace; copy the ledger into `BUILD-LEDGER.md` first. |
 | The build skills make "rulings" | Implementation only. A product question stops the run and goes to the owner. |

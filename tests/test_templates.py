@@ -23,6 +23,7 @@ from check_gates import (  # noqa: E402
     file_map_problems,
     full_round_problems,
     go_live_problems,
+    grilling_problems,
     parse_stages,
     project_ownership_problems,
     recheck_note,
@@ -33,7 +34,7 @@ from check_gates import test_table_problems as tt_problems  # noqa: E402  (not a
 ALL = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "BUILD-LEDGER.md",
        "RESULTS.md", "HANDOVER.md", "GLOSSARY.md", "PULL_REQUEST_TEMPLATE.md",
        "STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "GO-LIVE.md", "OWNERSHIP.md",
-       "OWNERSHIP-RECORD.md")
+       "OWNERSHIP-RECORD.md", "GRILLING.md")
 
 
 SECTIONS = {
@@ -204,6 +205,16 @@ class TemplateTests(unittest.TestCase):
 
     def test_ownership_template_has_no_recheck_note_before_it_is_filled_in(self):
         self.assertIsNone(recheck_note(read("OWNERSHIP.md"), date(2100, 1, 1)))
+
+    def test_grilling_template_sections_parse_and_fail_until_filled_in(self):
+        text = read("GRILLING.md")
+        self.assertEqual(missing_sections(text, ("Intake", "Design")), [])
+        self.assertIn("| Challenge | Owner's answer | Outcome |", visible(text))
+        clean = text.replace(EXAMPLE_MARKER, "")
+        for section in ("Intake", "Design"):
+            with self.subTest(section=section):
+                left = grilling_problems(clean, section)
+                self.assertTrue(left and all("Grilled with" in m for m in left), left)
 
     def test_all_templates_exist_and_carry_guidance(self):
         for name in ALL:

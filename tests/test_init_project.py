@@ -21,7 +21,7 @@ from tests.test_check_gates import GitCase, commit, git, messages, write  # noqa
 
 MARK_OPEN, MARK_CLOSE = "<!-- agentic-principles -->", "<!-- /agentic-principles -->"
 COMMON = ("DECISIONS.md", "AI-Agents.md", "REQUIREMENTS.md", "ATTACKS.md", "GLOSSARY.md", "BUILD-LEDGER.md",
-          "STAGES.md", "ARCHITECTURE.md", "OWNERSHIP.md")
+          "STAGES.md", "ARCHITECTURE.md", "OWNERSHIP.md", "GRILLING.md")
 CHECKS = ("checks/check_docs.py", "checks/check_gates.py", "checks/checklist.json")
 WORKFLOW = ".github/workflows/agentic-checks.yml"
 OVERRIDE_ENTRY = """

@@ -56,6 +56,7 @@ VOCABULARY = [
     "C-SEC-1", "C-WEB-1", "[", "]", "{", "}", "{\"a\": 1}", "[1, 2]", "null", "\"", "'", "\\", "\x00", "﻿", "\r",
     "flask==3.0.0", "requests>=2", "-r other.txt", "git+https://example.com/x.git", "[project]", "dependencies = [",
     "[tool.poetry]", "[dependency-groups]", "\"dependencies\": {", "\"devDependencies\": 5", "### D1. x", "### 1. x",
+    "## Intake", "## Design", "Grilled with:", "Grilled with: x", "| Challenge | Owner's answer | Outcome |",
 ]
 UNICODE = ["ı", "ş", "ğ", "İ", "é", "中文", "\U0001f600", "‮", "​", "́",
            "퟿", "\U0010ffff", " ", " ", " ", "\u0000"]
@@ -85,7 +86,7 @@ class GateRobustness(unittest.TestCase):
         gate_tests.commit(cls.root, {"STAGES.md": stages}, "retro")
         cls.seeds = {}
         for name in ("STAGES.md", "OVERRIDES.md", "ARCHITECTURE.md", "ATTACKS.md", "REQUIREMENTS.md", "DECISIONS.md",
-                     "BUILD-LEDGER.md", "GO-LIVE.md", "OWNERSHIP.md", "AI-Agents.md", "RESULTS.md",
+                     "BUILD-LEDGER.md", "GO-LIVE.md", "OWNERSHIP.md", "AI-Agents.md", "RESULTS.md", "GRILLING.md",
                      "checks/checklist.json", "requirements.txt", "pyproject.toml", "package.json"):
             path = cls.root / name
             if path.is_file():

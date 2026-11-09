@@ -70,11 +70,15 @@ def pass_row(root, n, evidence):
     return text
 
 
-def fill_lines(text, values):
+def fill_lines(text, values, count=1, nth=1):
+    """Fill the nth of exactly `count` empty 'label:' lines; any other number of them means the template changed."""
     for label, value in values.items():
-        text, count = re.subn(rf"^{re.escape(label)}:$", f"{label}: {value}", text, flags=re.M)
-        if count != 1:
-            raise AssertionError(f"no empty line '{label}:'")
+        pattern = re.compile(rf"^{re.escape(label)}:$", re.M)
+        hits = list(pattern.finditer(text))
+        if len(hits) != count:
+            raise AssertionError(f"expected {count} empty line(s) '{label}:', found {len(hits)}")
+        hit = hits[nth - 1]
+        text = text[:hit.start()] + f"{label}: {value}" + text[hit.end():]
     return text
 
 
@@ -113,13 +117,24 @@ class Walk:
         count = 5 if self.full else 3
         attacks = replace_examples(read(self.root, "ATTACKS.md"), {"": [
             f"| ATK-{i} | {ATTACKS[i - 1]} | 3 | fresh session |" for i in range(1, count + 1)]})
-        self.stage(0, "file:REQUIREMENTS.md, file:ATTACKS.md",
-                   {"REQUIREMENTS.md": requirements, "ATTACKS.md": attacks}, "stage 0 Intake")
+        grilling = replace_examples(read(self.root, "GRILLING.md"), {"Intake": [
+            "| Who calls add, and with what? | A script of mine, with two numbers. | REQ-1 kept |",
+            "| What if a string comes in? | It should refuse it. | ATK-1 kept |",
+            "| What does done mean? | The test for add passes. | REQ-1 kept |"]}, keep=("Design",))
+        grilling = fill_lines(grilling, {"Grilled with": "mattpocock-skills:grilling"}, count=2, nth=1)
+        self.stage(0, "file:REQUIREMENTS.md, file:ATTACKS.md, file:GRILLING.md",
+                   {"REQUIREMENTS.md": requirements, "ATTACKS.md": attacks, "GRILLING.md": grilling},
+                   "stage 0 Intake, Design grilling still the template's")
 
     def design(self):
         files = {"DECISIONS.md": replace_examples(read(self.root, "DECISIONS.md"), {"": [
             "### D1. Standard library only"]})}
-        evidence = "file:DECISIONS.md"
+        grilling = replace_examples(read(self.root, "GRILLING.md"), {"Design": [
+            "| Why no library? | Two numbers need none. | D1 |",
+            "| Where does add live? | In tool.py, nowhere else. | kept |",
+            "| What would you change first? | Nothing yet. | kept |"]})
+        files["GRILLING.md"] = fill_lines(grilling, {"Grilled with": "mattpocock-skills:grilling"})
+        evidence = "file:DECISIONS.md, file:GRILLING.md"
         if self.full:
             files["docs/design.md"] = "# Design\n\nOne function, add(a, b), used by a script.\n"
             evidence += ", file:docs/design.md"

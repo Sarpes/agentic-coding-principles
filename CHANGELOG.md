@@ -9,6 +9,10 @@ All notable changes to this project are recorded here.
 - `check_gates.py --private-unavailable`: for CI, where the companion is never present; only the unreadable case becomes a printed `NOT CHECKED` note. The project CI template runs the stage gate with it.
 - `init_project.py`: fills the `Record:` line with the project folder's name, creates the record template in the companion repo when it exists (never overwriting), and otherwise says how to make the companion with repo-kickoff.
 - Stage 5 and Stage 6 instructions, the skill's rules and the README: the session that asks the questions writes the answers straight into the private record.
+- Grilling runs on every project, Small or Full, at Stage 0 Intake and Stage 1 Design (D27). New template `templates/GRILLING.md` (copied by `init_project.py`) with an `## Intake` and a `## Design` section: a `Grilled with:` line naming the skill or the fallback, and at least 3 answered rows of challenge, owner's answer and outcome.
+- `check_gates.py`: Stages 0 and 1 need `file:GRILLING.md` in their evidence on both sizes; Stage 0 judges only the Intake section, Stage 1 only the Design section. A project already past those stages must add the record or log an override.
+- `companions.json` and the stage files: `mattpocock-skills:grilling` maps to Stages 0 and 1 for every project, with written challenges as the fallback.
+- `check_gates.py`: a git argument holding a NUL character (a commit value in `STAGES.md`, found by the robustness test) is a failed lookup instead of a crash.
 
 ## [0.2.0] - 2026-11-09
 
