@@ -2396,6 +2396,12 @@ class PrivateRecord(GitCase):
         write_record(root, b"## Explain-back\n\xff\xfe\n")
         self.assert_mentions(self.run_all(root)[0], "not valid UTF-8")
 
+    def test_a_record_path_no_system_can_open_fails_as_unreadable_without_a_crash(self):
+        """Found by the robustness fuzz: a NUL in the path raised ValueError, not OSError, and crashed the gate."""
+        root = self.project()
+        commit(root, {"OWNERSHIP.md": project_ownership(record="../proj-internal/own\x00ership/OWNERSHIP.md")}, "nul")
+        self.assert_mentions(self.only(root, "OWNERSHIP.md"), self.UNREADABLE)
+
     def test_no_answer_and_unreadable_are_different_problems(self):
         root = self.project(record=False)
         write_record(root, "# Ownership\n\nGraded by: a fresh session\n")
@@ -2442,8 +2448,11 @@ class PrivateRecord(GitCase):
     def test_an_override_line_in_the_record_still_silences_its_section(self):
         overrides = overrides_doc(entry(1, stage="5 Ship", reconfirmed="2026-01-02"))
         rows = [EB_OK[0], EB_OK[1], eb_row("how-to-recover", gap="unsure", status="open")]
-        root = self.project(through=5, explain=rows, overrides=overrides, ownership_lines={"override": "O1"})
+        root = self.project(through=5, overrides=overrides, record=False)
+        write_record(root, explain_doc(rows, "O1"))
         self.assertEqual(self.only(root, RECORD_REL), [])
+        write_record(root, explain_doc(rows))
+        self.assert_mentions(self.only(root, RECORD_REL), "gap")
 
     # ---- the CI mode: the private record is never present on a CI runner
     def test_ci_mode_turns_an_unreadable_record_into_a_loud_note(self):
