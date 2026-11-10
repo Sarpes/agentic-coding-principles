@@ -194,12 +194,14 @@ class GateRobustness(unittest.TestCase):
 
     def test_a_path_with_thousands_of_parts_is_judged_quickly(self):
         """Found on CI for 0.3.5: a fuzzed 'Record:' path of 29,100 parts took 4.1 s in Path.is_relative_to, which
-        walks every parent. The inside-the-project test must take one pass over the text."""
-        long = "../proj-internal/" + "a\\|/" * 30000 + "OWNERSHIP.md"
+        walks every parent. The inside-the-project test must take one pass over the text. A path too long for the
+        system to resolve counts as outside (fail-closed); on Windows runners without long-path support that is
+        every path of thousands of parts, so only the speed and the 'outside' answer are portable here."""
         started = time.perf_counter()
-        self.assertFalse(check_gates.inside(self.root / long, self.root))
-        self.assertTrue(check_gates.inside(self.root / ("a/" * 30000 + "x.md"), self.root))
+        self.assertFalse(check_gates.inside(self.root / ("../proj-internal/" + "a\\|/" * 30000 + "x.md"), self.root))
+        check_gates.inside(self.root / ("a/" * 30000 + "x.md"), self.root)
         self.assertLess(time.perf_counter() - started, 1.0)
+        self.assertTrue(check_gates.inside(self.root / ("a/" * 20 + "x.md"), self.root))
 
     def test_inside_answers_like_the_slow_check_on_ordinary_paths(self):
         for rel, expected in (("docs/a.md", True), ("../other/a.md", False), ("a/../../b.md", False),
