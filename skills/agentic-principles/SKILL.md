@@ -17,7 +17,7 @@ The owner builds software with AI agents and is not a software engineer by train
    - **Adopt:** code exists, no `STAGES.md`. Ask which stage the work has really reached; run init with `--adopt-at N` (N at most 5). `adopted` means "not done under this skill", never "passed".
    - **Resume:** `STAGES.md` exists. The current stage is the first one not closed. If `OWNERSHIP.md` has a re-check date that has passed and no `Re-check done`, do the Stage 6 re-check first.
    - **New cycle:** every stage closed and new work is wanted: `init_project.py --new-cycle <folder>`.
-3. Once `STAGES.md` exists, run `python checks/check_gates.py` in the project and tell the owner what it found: problems, open overrides, and any re-check reminder.
+3. Once `STAGES.md` exists, run `python checks/check_gates.py` in the project and tell the owner what it found: problems, open overrides, any re-check reminder, and any migration note. A migration note means the project was set up with an earlier version of this skill: before other work, go through each step with the owner, then raise the `Skill-version:` line in `STAGES.md`. If the gate says the project is newer than its gate script, run `init_project.py --update-checks <project>` first.
 4. Run `python <this skill's folder>/scripts/check_companions.py`. Its report is only a hint, because it can miss skills that do not come from the plugin cache. Compare it with this session's own skill list and, where they differ, trust the session's own skill list. Say out loud which companions for the current stage are missing.
 5. Load only the current stage's file, `stages/NN-name.md`, and follow it.
 

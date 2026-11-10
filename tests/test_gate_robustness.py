@@ -40,6 +40,7 @@ TODAY = date(2026, 1, 3)
 # Tokens that steer the parsers into their branches; random lines made of them find edges that random bytes miss.
 VOCABULARY = [
     "Size: small", "Size: full", "Size:", "Method: sub-agent", "Cycle: 1", "Cycle: -1", "Cycle: 99999999999999999999",
+    "Skill-version: 0.3.0", "Skill-version: 9.9.9", "Skill-version:", "Skill-version: 0.3",
     "Adopted-at: 3", "Adopted-at: 9", "Traits: none", "Traits: web, llm", "Traits:",
     "| Stage | Status | Evidence | Override |", "|---|---|---|---|", "| --- |", "|", "||||", "| | |", "\\|", "| a \\| b |",
     "| 3 Build | passed | commit:abc1234, file:BUILD-LEDGER.md | - |", "| 0 Intake | overridden | - | O1 |",

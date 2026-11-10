@@ -4,6 +4,7 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `STAGES.md` records the skill version (`Skill-version:`, written by `init_project.py`). `check_gates.py` lists, as notes, each migration a project set up with an earlier version still has to make (all of them when the line is missing), and refuses a project newer than its copied gate script (D29).
 - `CREDITS.md`: every companion project the skill names (18), with its author, source and licence, and the formats and sources this project follows (Keep a Changelog, Architecture Decision Records, the Claude Code plugin documentation, the checklist sources). `tests/test_credits.py` fails when a companion has no credit (D28).
 
 ## [0.3.0] - 2026-11-10

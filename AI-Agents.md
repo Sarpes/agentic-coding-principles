@@ -265,3 +265,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** Credit for everything the skill names or follows, at the owner's request.
 - **What I changed or rejected, and why:** None: the owner asked for the credits as built.
 - **Where the AI was wrong, and how I noticed:** The first draft credited repo-kickoff to the full name in this repository's licence; repo-kickoff's own licence file says "Sarp Esenyel", which is what its credit must say. Noticed by reading that licence file before committing.
+
+### 34. Recording the skill version and listing migrations (2026-11-10)
+
+- **Prompt (or summary of it):** Implement the agreed suggestions in order, starting with recording the skill version in each project and a migration check (raised by an outside review).
+- **What the AI produced:** Failing tests first (commit 134e943 after the move onto the credits branch), then a `Skill-version:` line in the `STAGES.md` template and in what init writes, `MIGRATIONS` and `version_problems` in `check_gates.py` (notes for each migration after the project's version, a problem for a project newer than its gate), a step at session start in the skill, a README line and D29.
+- **What I kept:** None yet: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** init first looked for any line starting with "Skill-version:" and found two, because the template's own comment explains the field on a line that starts the same way; 40 init tests errored. It now matches only a line holding a version number.

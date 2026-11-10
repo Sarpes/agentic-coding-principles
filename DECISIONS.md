@@ -282,6 +282,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** The licences are read at one date; a project that changes its licence is not noticed until someone reads it again. The test checks that each row has an author, an https source and a licence cell, not that they are right.
 - **What would make you change it:** A companion whose licence asks for a specific notice text, which would be copied into `CREDITS.md` word for word; or copying any outside text into this repository, which would bring that project's licence terms into the file that holds the text.
 
+### D29. Each project records its skill version, and the gate lists the migrations it has not made
+
+- **Context:** 0.3.0 changed the project layout (ownership answers moved to a private record, `GRILLING.md` required at Stages 0 and 1). A project set up earlier only meets failures, with no list of what changed. `STAGES.md` did not record which version a project followed. Raised in an outside review on 2026-11-10 (versioning and backward compatibility).
+- **Options considered:** (a) a `Skill-version:` line in `STAGES.md`, written by init, and a `MIGRATIONS` list in `check_gates.py` turned into notes for every step released after the project's version; (b) the same, but every older project fails until its line is raised; (c) a separate migration script that rewrites old projects.
+- **Chosen:** (a). A missing line is treated as "older than every migration", which covers the projects set up before this change. A project newer than its copied gate script is a problem, because that script cannot judge a layout it does not know.
+- **Why:** The stage checks already fail on the missing work, so a note that names the change is enough and does not block a project for a line. The list lives in the script that is copied into each project, so the notes are there without the repository.
+- **Rejected:** (b), it fails a project for a stale line instead of missing work; (c), rewriting the owner's records automatically would put words in them that the owner did not give (answers, evidence lines).
+- **Cost / trade-off:** Each breaking release must add its steps to `MIGRATIONS`; a test ties each step to a dated changelog section, but cannot tell whether a release forgot to add one. The owner raises the line by hand after migrating.
+- **What would make you change it:** Migrations that are purely mechanical (renaming a file, adding an empty line), which a script could make safely with the owner's OK.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
