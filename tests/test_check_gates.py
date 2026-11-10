@@ -2283,18 +2283,21 @@ class GoLiveTiming(GitCase):
     def project(self, through=6, size="small", comps=("Parser",), stage5="file:OWNERSHIP.md,file:GO-LIVE.md",
                 golive=None, explain=None, rounds=None, checklist=CHECKLIST_OK, traits_line=None, extra=None,
                 deps=(), hand="src", overrides=None, ship_override=False, ownership_lines=None, manual=None,
-                record=True):
+                record=True, test_text=None, attack_rows=None):
         """A consistent project (Small by default) whose stages 0 to `through` are passed; arguments break one thing.
         The owner's answers go to the private record next to the project (`record=False` leaves it out); the
-        project's OWNERSHIP.md holds only the pointer and the dates."""
+        project's OWNERSHIP.md holds only the pointer and the dates. The test file names every REQ and ATK id
+        unless `test_text` replaces it."""
         big = size == "full"
         root = self.make_repo({"README.md": "# p\n"})
         base = git(root, "rev-parse", "HEAD")
         commit(root, {"STAGES.md": table()}, "stages")
         built = commit(root, {"src/app.py": "x = 1\n", E: "x = 1\n"}, "built")
-        attack_rows = [(f"ATK-{i}", "an attack", "3" if i == 1 else "-", "x") for i in range(1, 6 if big else 4)]
+        if attack_rows is None:
+            attack_rows = [(f"ATK-{i}", "an attack", "3" if i == 1 else "-", "x") for i in range(1, 6 if big else 4)]
         attack_names = [r[0] for r in attack_rows]
-        files = {"REQUIREMENTS.md": REQ_OK, "ATTACKS.md": attack_doc(0, size_rows=attack_rows),
+        files = {E: test_text if test_text is not None else "x = 1  # " + " ".join(["REQ-1", *attack_names]) + "\n",
+                 "REQUIREMENTS.md": REQ_OK, "ATTACKS.md": attack_doc(0, size_rows=attack_rows),
                  "DECISIONS.md": DECISIONS_OK, "BUILD-LEDGER.md": LEDGER_OK, "GRILLING.md": GRILL_OK,
                  "GO-LIVE.md": golive or golive_ok(["C-SEC-1", *attack_names]),
                  "OWNERSHIP.md": project_ownership(commit={"src": built, "base": base}[hand],
@@ -2526,6 +2529,74 @@ class GoLiveTiming(GitCase):
     def test_small_with_eleven_tracked_source_files_is_refused(self):
         files = {"STAGES.md": table(), **{f"src/f{i}.py": "x = 1\n" for i in range(11)}}
         self.assert_mentions(self.only(self.make_repo(files), "STAGES.md"), "10")
+
+
+class Traceability(GitCase):
+    """From stage 4 on, every REQ-n and ATK-n must be named in a test file (its name, docstring or a comment): a
+    problem on Full, a note on Small. Before stage 4, with stage 3 passed, a note. An attack whose Rung says
+    'n/a: <reason>' is exempt. The check shows a link exists, not that the test exercises the requirement."""
+    TODAY = GoLiveTiming.TODAY
+    project, run_all, only = GoLiveTiming.project, GoLiveTiming.run_all, GoLiveTiming.only
+    ALL_BUT_ATK2 = "x = 1  # REQ-1 ATK-1 ATK-3 ATK-4 ATK-5\n"
+
+    def unlinked(self, problems_or_notes, ident):
+        return [x for x in problems_or_notes if ident in str(x) and "test file" in str(x)]
+
+    def test_every_id_linked_passes_on_both_sizes(self):
+        for size in ("small", "full"):
+            with self.subTest(size=size):
+                problems, notes = self.run_all(self.project(size=size, rounds=fr_rows(3)))
+                self.assertEqual(problems, [])
+                self.assertFalse([n for n in notes if "test file" in n], notes)
+
+    def test_an_unlinked_attack_is_a_problem_on_full_naming_its_file(self):
+        problems = self.only(self.project(size="full", rounds=fr_rows(3), test_text=self.ALL_BUT_ATK2),
+                             "ATTACKS.md")
+        self.assertTrue(self.unlinked(problems, "ATK-2"), problems)
+
+    def test_an_unlinked_attack_is_a_note_on_small(self):
+        problems, notes = self.run_all(self.project(test_text="x = 1  # REQ-1 ATK-1 ATK-3\n"))
+        self.assertFalse(self.unlinked(problems, "ATK-2"), problems)
+        self.assertTrue(self.unlinked(notes, "ATK-2"), notes)
+
+    def test_req_1_is_not_linked_by_req_10(self):
+        problems = self.only(self.project(size="full", rounds=fr_rows(3),
+                                          test_text="x = 1  # REQ-10 ATK-1 ATK-2 ATK-3 ATK-4 ATK-5\n"),
+                             "REQUIREMENTS.md")
+        self.assertTrue(self.unlinked(problems, "REQ-1"), problems)
+
+    def test_an_attack_marked_not_applicable_is_exempt(self):
+        rows = [("ATK-1", "an attack", "3", "x"), ("ATK-2", "an attack", "n/a: no network is used", "x"),
+                *[(f"ATK-{i}", "an attack", "-", "x") for i in range(3, 6)]]
+        root = self.project(size="full", rounds=fr_rows(3), attack_rows=rows, test_text=self.ALL_BUT_ATK2)
+        self.assertFalse(self.unlinked(self.run_all(root)[0], "ATK-2"))
+        self.assertFalse([p for p in self.only(root, "ATTACKS.md") if "Rung" in p.message])
+
+    def test_not_applicable_needs_a_reason(self):
+        rows = [("ATK-1", "an attack", "3", "x"), ("ATK-2", "an attack", "n/a", "x"),
+                *[(f"ATK-{i}", "an attack", "-", "x") for i in range(3, 6)]]
+        root = self.project(size="full", rounds=fr_rows(3), attack_rows=rows)
+        self.assert_mentions(self.only(root, "ATTACKS.md"), "Rung")
+
+    def test_before_stage_4_it_is_a_note_once_stage_3_is_passed(self):
+        problems, notes = self.run_all(self.project(size="full", through=3, test_text=self.ALL_BUT_ATK2))
+        self.assertFalse(self.unlinked(problems, "ATK-2"), problems)
+        self.assertTrue(self.unlinked(notes, "ATK-2"), notes)
+        problems, notes = self.run_all(self.project(size="full", through=2, test_text=self.ALL_BUT_ATK2))
+        self.assertFalse(self.unlinked(problems + notes, "ATK-2"))
+
+    def test_an_id_outside_a_test_file_does_not_count(self):
+        root = self.project(size="full", rounds=fr_rows(3), test_text=self.ALL_BUT_ATK2,
+                            extra={"docs/notes.md": "ATK-2 is covered\n", "src/other.py": "# ATK-2\n"})
+        self.assertTrue(self.unlinked(self.only(root, "ATTACKS.md"), "ATK-2"))
+
+    def test_test_files_are_found_by_name_or_folder(self):
+        for name in ("tests/helpers/check.py", "src/thing_test.py", "web/app.test.ts", "lib/x.spec.js",
+                     "test/integration.go"):
+            with self.subTest(name=name):
+                root = self.project(size="full", rounds=fr_rows(3), test_text=self.ALL_BUT_ATK2,
+                                    extra={name: "// ATK-2\n"})
+                self.assertFalse(self.unlinked(self.only(root, "ATTACKS.md"), "ATK-2"))
 
 
 class PrivateRecord(GitCase):
