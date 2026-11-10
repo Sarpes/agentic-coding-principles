@@ -302,6 +302,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** A comment satisfies the check, so it proves the link was written, not that the test exercises the requirement; the README says so. Fixtures and helpers under a test folder count as test files. No switch turns the check off; an override covers a project that cannot meet it.
 - **What would make you change it:** Projects whose tests live under other names (for example a `checks/` folder), which would call for a configurable pattern list in `STAGES.md`.
 
+### D31. Rung 2 runs from a mutation script shipped in this repository, for Python
+
+- **Context:** Rung 2 (proving that tests catch breakage) was done by hand, because the mutation companion needs a tool that is usually not installed, and the script behind the 179 mutations in `RESULTS.md` lived outside this repository, so nobody could rerun it (roadmap Task 4, raised again by an outside review).
+- **Options considered:** (a) `scripts/mutate.py`, standard library only, reading Python with `ast`, five kinds of change (flip a comparison, force a condition True or False, empty an `if` body, add one to an integer constant), each run on a throwaway copy; (b) a text-based mutator by regular expression, working on any language; (c) depend on an installed tool such as mutmut.
+- **Chosen:** (a). It works on a copy in a temporary folder and never changes the project. The tests run once unchanged first and the run stops if they fail. Exit 0 when every mutant is killed, 1 for any survivor or timeout, 2 when it cannot start. It is the fallback for "Proving tests catch breakage" for Python; other languages keep the manual way.
+- **Why:** `ast` gives exact, always-valid changes and keeps the dependency-free rule. Running on a copy is the only way to guarantee the project is untouched, and a test proves the files are byte-identical after a run.
+- **Rejected:** (b), text substitution produces code that does not parse and changes strings and comments; (c), a dependency the owner must install, which is the gap this closes.
+- **Cost / trade-off:** Python only, five kinds, no string or call changes. The rewritten copy loses comments and layout (behaviour is unchanged). Each mutant reruns the whole test command, so a slow suite makes a slow run: 145 mutants of `checks/check_docs.py` took 68 seconds.
+- **What would make you change it:** Projects mainly in another language, or survivors that the five kinds cannot express, which would call for more kinds or a language-specific tool recorded as a development dependency.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.
@@ -310,6 +320,7 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 
 ## Not done (and why)
 
+- The 12 to 14 mutants of `checks/check_docs.py` that survived the first run of `scripts/mutate.py`, and the two whose outcome changed between runs: not yet sorted into missing tests, equivalent mutations and a timing-dependent test (D31).
 - Other private documents (status notes, build logs) into the same companion repo: the owner deferred it on 2026-11-10; only the ownership answers move now (D26).
 - Tool-call guard hook: planned for a later version; the owner already has one (not public).
 - Tempo modes for short events: deferred, not needed for v0.1.

@@ -289,3 +289,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None yet: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** No new error in this step. The real stage files already met the new check on its first run; the two look-alike cases show it can fail.
+
+### 37. Shipping the mutation runner (2026-11-10)
+
+- **Prompt (or summary of it):** Implement the agreed suggestions in order; next, ship the mutation runner (roadmap Task 4).
+- **What the AI produced:** Failing tests first (commit e57fc14), then `scripts/mutate.py`, the fallback in `companions.json` and the Stage 4 file, a README limit, D31, and a real run on `checks/check_docs.py` against `tests/test_check_docs.py`.
+- **What I kept:** None yet: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The first real run showed survivors with an empty or wrong line: the line number came from the original file but the text was read from the rewritten copy, whose lines shift because `ast.unparse` drops comments. A regression test now pins the original line. The same run, repeated with the same code, gave 131 killed of 145 and then 133 of 145: two outcomes changed between runs, which points to a timing-dependent test in `tests/test_check_docs.py`; recorded as open, not silenced.
