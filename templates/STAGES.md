@@ -8,6 +8,9 @@ Method: normal (one session works through the plan) or sub-agent (one writer and
 Cycle: N. The first cycle of work is 1. Starting another cycle (init_project.py --new-cycle) archives this
 file and adds one; the gate measures commit evidence from the oldest commit whose STAGES.md holds the current
 number, so never reuse or lower a number.
+Skill-version: the version of the agentic-principles skill this project's layout follows, written by
+init_project.py. When the skill changes the layout in a later release, check_gates.py lists what to change as
+notes; after making the changes, raise this number to the new version.
 Adopted-at: N (optional). For a project that already existed: stages below N may be marked "adopted", which means
 "not done under this process", never "passed". Allowed in cycle 1 only. N must be in the first commit that ever
 added this file, and at most 5.
@@ -28,6 +31,7 @@ A stage may be passed only when every earlier stage is closed.
 Size: small
 Method: normal
 Cycle: 1
+Skill-version: 0.3.0
 
 | Stage | Status | Evidence | Override |
 |---|---|---|---|

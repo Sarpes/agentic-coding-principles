@@ -23,6 +23,7 @@ Layout (one file, standard library only):
 from __future__ import annotations
 
 import argparse
+import re
 import os
 import sys
 from dataclasses import dataclass, field
@@ -180,6 +181,11 @@ def render_stages(size: str, method: str, adopt_at: int | None = None, traits: s
         extra.append("Traits: " + (", ".join(sorted(traits)) or "none"))
     lines = _replace_line(lines, "Method: normal", [f"Method: {method}"])
     lines = _replace_line(lines, "Cycle: 1", [f"Cycle: {cycle}", *extra])
+    version_lines = [line for line in lines if re.fullmatch(r"Skill-version: \d+\.\d+\.\d+", line)]
+    if len(version_lines) != 1:
+        raise InitError(f"templates/{STAGES_FILE} no longer has exactly one 'Skill-version:' line "
+                        f"({len(version_lines)} found)")
+    lines = _replace_line(lines, version_lines[0], [f"Skill-version: {check_gates.__version__}"])
     for n in range(adopt_at or 0):
         name = check_gates.STAGE_NAMES[n]
         lines = _replace_line(lines, f"| {name} | open | - | - |", [f"| {name} | adopted | - | - |"])
