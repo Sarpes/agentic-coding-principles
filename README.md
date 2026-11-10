@@ -182,7 +182,7 @@ The scripts and the skill have limits, and a green result must not be read as mo
 
 ## Works with these skills
 
-The skill is a conductor: it decides which installed skill runs when, and adds gates, evidence and plain-language guidance around it. It does not copy or restate their instructions; credit for the techniques belongs to their authors, named here by plugin only. Every one is optional. When a plugin is missing or switched off, the skill says so, uses the fallback named in `skills/agentic-principles/companions.json` and records the fact as evidence for that stage; it never silently skips the step.
+The skill is a conductor: it decides which installed skill runs when, and adds gates, evidence and plain-language guidance around it. It does not copy or restate their instructions; credit for the techniques belongs to their authors. [CREDITS.md](CREDITS.md) names each one's author, source and licence, along with the formats this project follows. Every one is optional. When a plugin is missing or switched off, the skill says so, uses the fallback named in `skills/agentic-principles/companions.json` and records the fact as evidence for that stage; it never silently skips the step.
 
 Install a plugin with `/plugin install <plugin>@<marketplace>`, after adding its marketplace once with `/plugin marketplace add <owner/repo>`. The marketplaces and their sources:
 
