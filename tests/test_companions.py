@@ -23,6 +23,7 @@ from check_companions import (  # noqa: E402
     mapping_problems,
     missing,
     report,
+    stage_table_problems,
 )
 
 
@@ -320,6 +321,67 @@ class TestMainNeverRaises(unittest.TestCase):
             code = main([tmp.name])
         self.assertEqual(code, 0)
         self.assertIn("p:s", out.getvalue())
+
+
+def stage_texts() -> dict[int, str]:
+    return {int(p.name[:2]): p.read_text(encoding="utf-8") for p in sorted((SKILL / "stages").glob("0*-*.md"))}
+
+
+def companion_names(rows) -> list[str]:
+    names = []
+    for r in rows:
+        if r["kind"] in ("skill", "agent", "command"):
+            names += [r["primary"], *[a for a in r.get("also", []) if ":" in a]]
+    return sorted(set(names))
+
+
+class TestWorksWithNoCompanions(unittest.TestCase):
+    """The skill must work with no companion installed: every capability names a fallback the agent can act on, in
+    companions.json and in the stage file the agent reads, and an empty machine reports each one missing with it."""
+
+    def setUp(self):
+        self.rows = load(SKILL / "companions.json")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.claude = Path(tmp.name)
+
+    def test_an_empty_machine_has_nothing_installed(self):
+        self.assertEqual(installed(self.claude / "plugins", self.claude / "settings.json"), set())
+
+    def test_an_empty_machine_reports_every_installable_companion_missing_with_its_fallback(self):
+        lines = report(self.rows, set())
+        for name in companion_names(self.rows):
+            with self.subTest(name=name):
+                line = next((l for l in lines if l.startswith(f"MISSING {name}")), None)
+                self.assertIsNotNone(line, lines)
+                self.assertIn("fallback:", line)
+
+    def test_every_fallback_is_an_action_not_install_or_skip(self):
+        for r in self.rows:
+            with self.subTest(capability=r["capability"]):
+                fallback = r["fallback"].strip().lower()
+                self.assertGreaterEqual(len(fallback), 10, r["fallback"])
+                self.assertFalse(fallback.startswith(("install", "skip", "none", "n/a", "-")), r["fallback"])
+
+    def test_every_stage_file_names_each_of_its_companions_with_a_fallback(self):
+        self.assertEqual(stage_table_problems(self.rows, stage_texts()), [])
+
+    def test_a_stage_file_missing_a_companion_row_is_caught(self):
+        texts = stage_texts()
+        texts[1] = "\n".join(l for l in texts[1].split("\n") if "mattpocock-skills:grilling" not in l)
+        problems = stage_table_problems(self.rows, texts)
+        self.assertTrue(any("mattpocock-skills:grilling" in p and "stage 1" in p for p in problems), problems)
+
+    def test_a_blank_fallback_cell_is_caught(self):
+        texts = stage_texts()
+        lines = texts[4].split("\n")
+        i = next(n for n, l in enumerate(lines) if "`deepeval:deepeval`" in l)
+        cells = lines[i].split("|")
+        cells[3] = " "
+        lines[i] = "|".join(cells)
+        texts[4] = "\n".join(lines)
+        problems = stage_table_problems(self.rows, texts)
+        self.assertTrue(any("deepeval:deepeval" in p and "blank" in p for p in problems), problems)
 
 
 if __name__ == "__main__":

@@ -281,3 +281,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None yet: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The brief asked for a note before Stage 4 on every run; the AI judged that noisy and started the note at Stage 3 passed instead, a change the owner should confirm (recorded in D30). The Full walk test failed once the rule was on, correctly: its template-built test file named no ids.
+
+### 36. Proving the skill works with no companions (2026-11-10)
+
+- **Prompt (or summary of it):** Implement the agreed suggestions in order; next, prove the skill works with no companions installed (roadmap recommendation 3).
+- **What the AI produced:** Failing tests first, then `stage_table_problems` in `check_companions.py` (each companion a stage uses must have a row with a non-blank fallback in that stage's file) and the fallback printed beside every MISSING line. Tests run the report on an empty Claude folder and catch a removed row and a blanked fallback cell.
+- **What I kept:** None yet: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** No new error in this step. The real stage files already met the new check on its first run; the two look-alike cases show it can fail.
