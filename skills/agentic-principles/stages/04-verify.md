@@ -16,7 +16,7 @@ Each **part** climbs the ladder. A part is one component listed in `ARCHITECTURE
 | 4 | Real integration | Start from a clean clone using only the documented commands, then an end-to-end run with the real services. Do this early and repeat it. |
 | 5 | Deliberate failure | Kill a process, break a key, cut the network, feed corrupt data. The system recovers, or fails visibly with a reason. |
 
-1. Say plainly: **rung 2 is normally done by hand.** The mutation companion needs a separate tool (mewt or muton, programs that make small deliberate changes to the code and check whether a test notices) that is usually not installed, and its Python support is unconfirmed. By hand means: on a throwaway copy (a copy of the project made only for this check and discarded after), break each key rule and confirm a test goes red. A language-specific tool may be added as a development dependency with a decision entry.
+1. **Rung 2 for Python code runs from a script:** `python <this skill's folder>/scripts/mutate.py --target <file.py> --timeout 120 -- <test command>`. It makes small deliberate changes (a *mutation*: a comparison flipped, a condition forced, a branch emptied, a number changed) one at a time on a throwaway copy, a copy of the project made only for this check, and reports which ones the tests noticed (*killed*) and which they did not (*survived*). It never changes the project. Paste its table into `RESULTS.md`; each survivor gets a test or a written reason it cannot matter. The mutation companion needs a separate tool (mewt or muton) that is usually not installed. For code in other languages, rung 2 is done by hand: on a throwaway copy, break each key rule and confirm a test goes red.
 2. Fill the test table in `ARCHITECTURE.md`. Each cell names a tracked test or results file, or a commit, or says `n/a: <reason>`. "ok" and "done" are refused. An attack must be tried at the rung its list entry names. Write each `REQ-n` and `ATK-n` in the name, docstring or a comment of the test that tries it: `check_gates.py` refuses on Full (and reminds on Small) when an id is named in no test file. An attack that cannot happen in this project gets `n/a: <reason>` in its Rung column instead.
 3. Run rung 4 early, not only at the end.
 4. Write the results in `RESULTS.md` so the owner can check them without reading code, raw counts next to rates: "I removed the rule and 3 tests went red", "14 of 109 missed, then 109 of 109".
@@ -27,7 +27,7 @@ Each **part** climbs the ladder. A part is one component listed in `ARCHITECTURE
 | Capability | Companion | If it is missing |
 |---|---|---|
 | Whole-input testing | `property-based-testing:property-based-testing` | hand-picked boundary and hostile inputs |
-| Proving tests catch breakage | `mutation-testing:mutation-testing` | break each key rule on a throwaway copy and confirm a test fails |
+| Proving tests catch breakage | `mutation-testing:mutation-testing` | `scripts/mutate.py` for Python; for other languages, break each key rule on a throwaway copy and confirm a test fails |
 | Silent failures, test gaps | `pr-review-toolkit:silent-failure-hunter`, and `pr-review-toolkit:pr-test-analyzer` | reviewer checklist |
 | Evaluating AI output (projects with an LLM) | `deepeval:deepeval` | labelled examples checked by a person, raw counts reported |
 | Running the real thing | `run`, or `example-skills:webapp-testing` for browser apps | documented commands from a clean clone |

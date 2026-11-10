@@ -13,7 +13,7 @@ RESULTS.md             measurements of this repository's own scripts: rules remo
 principles/            index plus one file per stage (00-intake ... 07-retro)
 templates/             DECISIONS, AI-Agents, REQUIREMENTS, BUILD-LEDGER, RESULTS, HANDOVER, GLOSSARY, PR template
 checks/check_docs.py   the documentation gate (CLI)
-skills/agentic-principles/   the skill: SKILL.md, stages/, companions.json, scripts/ (init_project, check_gates, check_companions, build_checklist)
+skills/agentic-principles/   the skill: SKILL.md, stages/, companions.json, scripts/ (init_project, check_gates, check_companions, build_checklist, mutate)
 checklist/             engineering checklist, each item with a cited source; checklist.json is generated
 .claude-plugin/        plugin and marketplace manifests
 docs/design-skill.md   the approved design of the skill

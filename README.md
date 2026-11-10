@@ -177,7 +177,7 @@ The scripts and the skill have limits, and a green result must not be read as mo
 - **Two things cannot be fully scripted:** proving that a test failed before its code existed, and judging the quality of written prose.
 - **A requirement's link to its test is checked, not what the test does.** From Stage 4 on, every `REQ-n` and `ATK-n` must be named in a test file (its name, docstring or a comment): a failure on Full, a reminder on Small. An attack whose Rung says `n/a: <reason>` is exempt. The check proves the link was written; it cannot tell whether that test really exercises the requirement, which is what the reviewer and the test ladder are for.
 - **The companion report is a hint.** `check_companions.py` reads the plugin cache and can miss skills that live elsewhere; the session's own skill list wins.
-- **Mutation testing's tool may be unavailable.** The plugin needs a tool that may not be installed, so rung 2 is usually done by hand on a throwaway copy, and the skill says so.
+- **Automatic mutation testing covers Python only.** `scripts/mutate.py` runs rung 2 for Python files with five kinds of change (comparisons, conditions, branches, integer constants) on a throwaway copy; it cannot change strings, function calls or other languages. For other code, rung 2 is done by hand on a throwaway copy, and the skill says so.
 - **A companion that needs the Workflow tool may not run in every session.** It then counts as missing, and its fallback is used and recorded.
 - **Automatic loading is proven only once the skill is installed.** The tests check the skill's files and that its instructions hold under pressure; whether an agent loads it on its own can only be seen in a real installed session.
 

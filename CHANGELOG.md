@@ -4,6 +4,7 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `scripts/mutate.py`: rung 2 for Python from a script in this repository, on a throwaway copy, with five kinds of change and a table ready for `RESULTS.md`; the fallback for proving tests catch breakage (D31). First run on `checks/check_docs.py`: 145 mutants, 131 then 133 killed in two runs.
 - `check_companions.py`: each MISSING line names the fallback to use, and `stage_table_problems` checks that every stage file names each of its companions with a fallback; tests prove the skill runs with none installed.
 - `check_gates.py`: from Stage 4 on, every `REQ-n` and `ATK-n` must be named in a test file (a problem on Full, a note on Small; a note from Stage 3 on). An attack whose Rung is `n/a: <reason>` is exempt (D30).
 - `STAGES.md` records the skill version (`Skill-version:`, written by `init_project.py`). `check_gates.py` lists, as notes, each migration a project set up with an earlier version still has to make (all of them when the line is missing), and refuses a project newer than its copied gate script (D29).
