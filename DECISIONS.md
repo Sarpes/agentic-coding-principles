@@ -292,6 +292,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** Each breaking release must add its steps to `MIGRATIONS`; a test ties each step to a dated changelog section, but cannot tell whether a release forgot to add one. The owner raises the line by hand after migrating.
 - **What would make you change it:** Migrations that are purely mechanical (renaming a file, adding an empty line), which a script could make safely with the owner's OK.
 
+### D30. Every requirement and attack must be named in a test file from Stage 4 on
+
+- **Context:** An outside review (2026-11-10) found that a shallow attack list passes: the test table already needs a row per `REQ-n` and `ATK-n` naming a tracked test file, but nothing ties that file to the id. Linking requirements to tests is standard practice and can be checked by script.
+- **Options considered:** (a) the id must appear in a tracked test file, found by name patterns or test folders; (b) parse each language's test functions and look for the id in test names only; (c) a separate mapping file from ids to tests.
+- **Chosen:** (a). A problem on Full from Stage 4 passed, a note on Small, and a note before Stage 4 once Stage 3 is passed (tests exist by then). Test files: `test_*.py`, `*_test.py`, `*_test.go`, `*.test.js/jsx/ts/tsx/mjs`, `*.spec.*`, `*_spec.rb`, or a source file under a `tests`, `test`, `spec` or `__tests__` folder. A whole-id match, so `REQ-1` is not found in `REQ-10`. An attack whose Rung is `n/a: <reason>` is exempt.
+- **Why:** (a) works across languages with the standard library and asks for one written link that a reviewer can follow. The roadmap asked for a note before Stage 4; it starts at Stage 3 passed, because before then no test exists and a note at every session would be noise.
+- **Rejected:** (b), a parser per language for a link that a comment states as well; (c), a second place to keep in step with the test table.
+- **Cost / trade-off:** A comment satisfies the check, so it proves the link was written, not that the test exercises the requirement; the README says so. Fixtures and helpers under a test folder count as test files. No switch turns the check off; an override covers a project that cannot meet it.
+- **What would make you change it:** Projects whose tests live under other names (for example a `checks/` folder), which would call for a configurable pattern list in `STAGES.md`.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

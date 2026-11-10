@@ -8,7 +8,9 @@ Columns, in this order:
   ID           ATK-1, ATK-2, ... in order, no gaps
   Attack       what is done to the system, in plain words
   Rung         the test rung the attack must be tried at: 3 (hostile or generated input) or 5 (deliberate
-               failure); "-" when it needs no particular rung
+               failure); "-" when it needs no particular rung; "n/a: <reason>" when the attack cannot happen
+               in this project (it is then exempt from the test-link check)
+From stage 4 on, each attack's id (ATK-1, ...) must appear in a test file that tries it.
   Drafted by   who or what drafted the row (for example "fresh session")
 A Small project needs at least 3 rows and a Full project at least 5. This list lives in its own file because
 check_docs.py reads every table row of REQUIREMENTS.md as a requirement.

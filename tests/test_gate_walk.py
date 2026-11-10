@@ -146,7 +146,9 @@ class Walk:
                    "stage 2 Plan")
 
     def build(self):
-        work = commit(self.root, {"tool.py": "def add(a, b):\n    \"\"\"The sum.\"\"\"\n    return a + b\n"}, "work")
+        ids = " ".join(["REQ-1"] + [f"ATK-{i}" for i in range(1, (6 if self.full else 4))])
+        work = commit(self.root, {"tool.py": "def add(a, b):\n    \"\"\"The sum.\"\"\"\n    return a + b\n",
+                                  "tests/test_tool.py": f"import unittest\n\n# Covers {ids}.\n"}, "work")
         ledger = replace_examples(read(self.root, "BUILD-LEDGER.md"), {
             "Reviews": ["| 1. add() | A fresh session that did not write the code | Approved |"],
             "Rulings": ["### R1. One file for the tests"],
