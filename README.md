@@ -92,7 +92,7 @@ An existing project can be adopted at whatever stage it has really reached. Earl
 
 You open the agent in the project folder; you do not need to ask for anything. Before any work the agent:
 
-1. **Runs the gate check** (`python checks/check_gates.py`) and tells you what it found: problems, overrides still open, and whether an ownership re-check is due.
+1. **Runs the gate check** (`python checks/check_gates.py`) and tells you what it found: problems, overrides still open, whether an ownership re-check is due, and whether your project was set up with an earlier version of the skill. `STAGES.md` records that version in its `Skill-version:` line; when a later release changes the layout, the check lists what to change, one step per note.
 2. **Checks the helper skills** (`check_companions.py`) and says out loud which ones the current stage needs and which are missing. A missing one is replaced by a recorded fallback, never skipped silently.
 3. **Opens the current stage**: the first one in `STAGES.md` that is not closed. It says in plain words what the stage is for, what evidence will close it, and which overrides are open.
 

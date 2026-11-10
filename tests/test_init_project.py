@@ -87,6 +87,18 @@ class TestInit(InitCase):
         stages = check_gates.parse_stages((root / "STAGES.md").read_text(encoding="utf-8"))
         self.assertEqual((stages.size, stages.method), ("small", "normal"))
 
+    def test_the_skill_version_is_recorded(self):
+        for size, kwargs in (("small", {}), ("full", {"adopt_at": 2})):
+            with self.subTest(size=size):
+                root, _ = self.make_project(size, **kwargs)
+                stages = check_gates.parse_stages((root / "STAGES.md").read_text(encoding="utf-8"))
+                self.assertEqual(stages.skill_version, tuple(map(int, check_gates.__version__.split("."))))
+
+    def test_the_template_version_line_matches_the_gate(self):
+        """A release that raises the version must raise the template's line too, or new projects start stale."""
+        text = (ROOT / "templates" / "STAGES.md").read_text(encoding="utf-8")
+        self.assertIn(f"\nSkill-version: {check_gates.__version__}\n", text)
+
     def test_every_common_file_is_copied_and_listed_as_created(self):
         root, report = self.make_project("small")
         for name in COMMON + CHECKS + (WORKFLOW,):

@@ -89,10 +89,13 @@ def row(n, status, evidence="", override="-"):
     return n, f"| {STAGE_NAMES[n]} | {status} | {evidence} | {override} |"
 
 
-def table(*rows, size="small", method="normal", extra=(), cycle=1):
+def table(*rows, size="small", method="normal", extra=(), cycle=1, version="current"):
+    """STAGES.md text. `version` is the Skill-version line: the gate's own version by default, None for no line."""
     given = dict(rows)
     body = [given.get(n) or f"| {STAGE_NAMES[n]} | open | - | - |" for n in range(8)]
-    head = [f"Size: {size}", f"Method: {method}", f"Cycle: {cycle}", *extra, "",
+    version_line = () if version is None else (
+        f"Skill-version: {check_gates.__version__ if version == 'current' else version}",)
+    head = [f"Size: {size}", f"Method: {method}", f"Cycle: {cycle}", *version_line, *extra, "",
             "| Stage | Status | Evidence | Override |", "|---|---|---|---|"]
     return "\n".join(head + body) + "\n"
 
@@ -2177,6 +2180,60 @@ class GrillingRules(unittest.TestCase):
         for text in ("", "## Intake\n", "## Intake\n|||\n", "\x00" * 50, "## Intake\n\n" + "| a |\n" * 300):
             with self.subTest(size=len(text)):
                 self.check(text)
+
+
+class SkillVersion(GitCase):
+    """STAGES.md records the skill version a project was set up with. A breaking release lists what an older
+    project must change (notes, so an old project is told rather than surprised); a project newer than its copied
+    gate script is a problem, because an old gate cannot judge a newer layout."""
+
+    def run_on(self, version):
+        root = self.make_repo({"STAGES.md": table(version=version), "README.md": "# p\n"})
+        return check_project(root)
+
+    def test_the_line_is_parsed(self):
+        stages = parse_stages(table(version="0.2.0"))
+        self.assertEqual((stages.skill_version, stages.errors), ((0, 2, 0), []))
+
+    def test_the_current_version_gives_no_problem_and_no_note(self):
+        self.assertEqual(self.run_on("current"), ([], []))
+
+    def test_an_older_version_lists_each_migration_since_then_as_notes(self):
+        problems, notes = self.run_on("0.2.0")
+        self.assertEqual(problems, [])
+        migration = [n for n in notes if n.startswith("migration")]
+        self.assertEqual(len(migration), len([m for m in check_gates.MIGRATIONS if m[0] > (0, 2, 0)]), notes)
+        self.assertTrue(any("GRILLING.md" in n for n in migration), notes)
+        self.assertTrue(any("Record:" in n for n in migration), notes)
+        self.assertTrue(any("Skill-version" in n for n in notes), notes)
+
+    def test_a_version_after_every_migration_gets_none(self):
+        newest = max(m[0] for m in check_gates.MIGRATIONS)
+        problems, notes = self.run_on(".".join(map(str, newest)))
+        self.assertFalse([n for n in notes if n.startswith("migration")], notes)
+
+    def test_a_missing_line_is_a_note_listing_every_migration(self):
+        problems, notes = self.run_on(None)
+        self.assertEqual(problems, [])
+        self.assertTrue(any("no 'Skill-version:' line" in n for n in notes), notes)
+        self.assertEqual(len([n for n in notes if n.startswith("migration")]), len(check_gates.MIGRATIONS))
+
+    def test_a_project_newer_than_its_gate_script_is_a_problem(self):
+        major, minor, patch = map(int, check_gates.__version__.split("."))
+        problems, _ = self.run_on(f"{major}.{minor + 1}.0")
+        self.assert_mentions(problems, "--update-checks")
+
+    def test_a_malformed_version_is_a_problem(self):
+        for bad in ("abc", "1.2", "0.3.0-beta", ""):
+            with self.subTest(bad=bad):
+                self.assertTrue(any("Skill-version" in m for _, m in parse_stages(table(version=bad)).errors))
+
+    def test_every_migration_names_a_release_in_the_changelog(self):
+        text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        for version, step in check_gates.MIGRATIONS:
+            with self.subTest(version=version):
+                self.assertIn(f"## [{'.'.join(map(str, version))}]", text)
+                self.assertTrue(step.strip())
 
 
 class RecheckNote(unittest.TestCase):

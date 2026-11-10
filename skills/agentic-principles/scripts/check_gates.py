@@ -44,6 +44,17 @@ from typing import NamedTuple
 
 __version__ = "0.3.0"
 
+# What a project set up with an earlier skill version must change, by the release that changed it. The gate lists
+# each step released after the project's Skill-version line as a note. A breaking release adds its steps here.
+MIGRATIONS: tuple[tuple[tuple[int, int, int], str], ...] = (
+    ((0, 3, 0), "move the explain-back and full-round answers out of OWNERSHIP.md into the private record in "
+                "../<project>-internal/ownership/OWNERSHIP.md (template OWNERSHIP-RECORD.md), and add the lines "
+                "'Record:' and 'Explain-back done:' to OWNERSHIP.md"),
+    ((0, 3, 0), "add GRILLING.md (template GRILLING.md) and name it in the evidence of stages 0 and 1 if they are "
+                "already passed, or log an override for each"),
+)
+VERSION_TEXT = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+
 STAGE_NAMES = ("0 Intake", "1 Design", "2 Plan", "3 Build", "4 Verify", "5 Ship", "6 Own", "7 Retro")
 STATUSES = ("open", "passed", "overridden", "adopted", "reopened")
 CLOSED = ("passed", "overridden", "adopted")
@@ -92,6 +103,8 @@ class Stages:
     adopted_at_line: int = 0
     cycle: int | None = None
     traits: set[str] | None = None
+    skill_version: tuple[int, int, int] | None = None
+    skill_version_line: int = 0
     rows: dict[int, Row] = field(default_factory=dict)
     errors: list[tuple[int, str]] = field(default_factory=list)      # (line, message), turned into Problems later
 
@@ -278,7 +291,7 @@ def parse_stages(text: str) -> Stages:
     stages = Stages()
     seen: set[str] = set()
     table: list[tuple[int, str]] = []
-    header = re.compile(r"^(Size|Method|Cycle|Adopted-at|Traits):[ \t]*(.*?)[ \t]*$")
+    header = re.compile(r"^(Size|Method|Cycle|Adopted-at|Traits|Skill-version):[ \t]*(.*?)[ \t]*$")
     for number, line in enumerate(lines, start=1):
         m = header.match(line)
         if not m:
@@ -306,6 +319,14 @@ def parse_stages(text: str) -> Stages:
                 stages.cycle = int(value)
             else:
                 stages.errors.append((number, f"Cycle must be a whole number from 1 (found '{value}')"))
+        elif label == "Skill-version":
+            stages.skill_version_line = number
+            m = VERSION_TEXT.fullmatch(value)
+            if m:
+                stages.skill_version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            else:
+                stages.errors.append((number, f"Skill-version must be a version like {__version__} (found "
+                                              f"'{value}')"))
         elif label == "Adopted-at":
             stages.adopted_at_line = number
             if value.isdigit():
@@ -1859,6 +1880,27 @@ def _load(root: Path, name: str):
     return text, [problem] if problem else []
 
 
+def version_problems(stages, file: str = STAGES_FILE) -> tuple[list[Problem], list[str]]:
+    """(problems, notes) from the Skill-version line. Each migration released after the project's version (all of
+    them when the line is missing) is a note; a project newer than this gate script is a problem, because this
+    script cannot judge a layout it does not know."""
+    gate = tuple(int(part) for part in __version__.split("."))
+    version = stages.skill_version
+    if version is not None and version > gate:
+        return [Problem(file, stages.skill_version_line, f"Skill-version {'.'.join(map(str, version))} is newer "
+                        f"than this gate script ({__version__}); run init_project.py --update-checks <project> "
+                        "to copy the current checks")], []
+    notes = []
+    if version is None and stages.skill_version_line == 0:
+        notes.append("no 'Skill-version:' line: this project was set up before versions were recorded, so every "
+                     "migration below may apply; check each, then add 'Skill-version: " + __version__ + "'")
+    pending = [(v, step) for v, step in MIGRATIONS if version is None or v > version]
+    notes += [f"migration to {'.'.join(map(str, v))}: {step}" for v, step in pending]
+    if pending and version is not None:
+        notes.append(f"after these migrations, set 'Skill-version: {__version__}' in {file}")
+    return [], notes
+
+
 def check_project(root, today: date | None = None,
                   private_unavailable: bool = False) -> tuple[list[Problem], list[str]]:
     """(problems, notes) for a project folder. `today` (default: the current date) only decides the re-check note;
@@ -1887,6 +1929,10 @@ def check_project(root, today: date | None = None,
                                              private_unavailable)
     problems += found
     notes += more
+    if stages is not None:
+        found, more = version_problems(stages)
+        problems += found
+        notes += more
     notes += [f"open override {ident} (stage {o.stage}): see {OVERRIDES_FILE}"
               for ident, o in overrides.items() if o.status == "open"]
     problems = sorted(set(problems), key=lambda p: (p.file, p.line, p.message))   # one report per problem
