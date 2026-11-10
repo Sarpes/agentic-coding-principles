@@ -1167,12 +1167,89 @@ def attack_problems(text, size, file: str = ATTACKS_FILE) -> list[Problem]:
         if ident.strip("` ") != f"ATK-{position}":
             problems.append(Problem(file, number, f"id '{ident}' should be ATK-{position}; ids run ATK-1, "
                                                   "ATK-2, ... in order"))
-        if rung not in ("3", "5", "-"):
-            problems.append(Problem(file, number, f"Rung '{rung}' must be 3, 5 or - (not needed)"))
+        if rung not in ("3", "5", "-") and not _not_applicable(rung):
+            problems.append(Problem(file, number, f"Rung '{rung}' must be 3, 5, - (no particular rung) or "
+                                                  "'n/a: <reason>' (the attack cannot happen here)"))
         for label, value in (("Attack", attack), ("Drafted by", author)):
             if not value.strip():
                 problems.append(Problem(file, number, f"'{label}' is blank"))
     return problems
+
+
+def _not_applicable(cell: str) -> bool:
+    """'n/a: <reason>' with a real reason: the attack cannot happen in this project."""
+    m = re.fullmatch(r"n/a[ \t]*:[ \t]*(.*)", cell.strip(), re.I)
+    return bool(m and m.group(1).strip() and not PLACEHOLDER.fullmatch(m.group(1).strip()))
+
+
+# A test file: a common test name, or a source file below a folder that holds tests. The same patterns are named in
+# the problem message, so an owner knows where an id has to appear.
+TEST_NAMES = ("test_*.py", "*_test.py", "*_test.go", "*.test.js", "*.test.jsx", "*.test.ts", "*.test.tsx",
+              "*.test.mjs", "*.spec.*", "*_spec.rb")
+TEST_FOLDERS = ("tests", "test", "spec", "__tests__")
+
+
+def test_files(tracked) -> list[str]:
+    """Tracked files that hold tests, by name or by folder (folder matches count only for source files)."""
+    found = []
+    for rel in tracked:
+        parts = rel.split("/")
+        base = parts[-1].lower()
+        if any(fnmatch.fnmatchcase(base, p) for p in TEST_NAMES) or (
+                base.endswith(SOURCE_EXTENSIONS) and any(p.lower() in TEST_FOLDERS for p in parts[:-1])):
+            found.append(rel)
+    return found
+
+
+def _id_lines(text, pattern) -> dict[str, int]:
+    """{id: first line} for each id the pattern finds outside comments and code fences."""
+    found: dict[str, int] = {}
+    for number, line in enumerate(clean_lines(text), start=1):
+        for m in pattern.findall(line):
+            found.setdefault(m, number)
+    return found
+
+
+def traceability(root, tracked, requirements, attacks):
+    """[(file, line, id)] for each REQ-n and ATK-n named in no test file. Exempt: attacks marked 'n/a: <reason>'.
+    An id counts only as a whole id: REQ-1 is not found inside REQ-10."""
+    texts = []
+    for rel in test_files(tracked):
+        try:
+            data = (Path(root) / rel).read_bytes()
+        except OSError:
+            continue
+        if len(data) <= 2_000_000:
+            texts.append(data.decode("utf-8", "replace"))
+    corpus = "\n".join(texts)
+    wanted = [(REQUIREMENTS_FILE, line, ident) for ident, line in _id_lines(requirements or "", REQ_ID).items()]
+    rows, _ = _attack_rows(attacks or "")
+    wanted += [(ATTACKS_FILE, number, cells[0].strip("` ")) for number, cells in rows
+               if ATK_ID.fullmatch(cells[0].strip("` ")) and not _not_applicable(cells[2])]
+    return [(file, line, ident) for file, line, ident in wanted
+            if not re.search(rf"(?<![A-Za-z0-9]){re.escape(ident)}(?![0-9])", corpus)]
+
+
+def traceability_problems(root, tracked, stages):
+    """(problems, notes): unlinked ids are problems on Full from stage 4 passed, notes on Small, and notes before
+    stage 4 once stage 3 (Build) is passed, when tests exist to link to."""
+    if stages is None:
+        return [], []
+    passed = {n for n, row in stages.rows.items() if row.status == "passed"}
+    if 3 not in passed and 4 not in passed:
+        return [], []
+    requirements, _ = _load(Path(root), REQUIREMENTS_FILE)
+    attacks, _ = _load(Path(root), ATTACKS_FILE)
+    missing = traceability(root, tracked, requirements, attacks)
+    if 4 in passed and stages.size == "full":
+        return [Problem(file, line, _unlinked_message(ident)) for file, line, ident in missing], []
+    return [], [f"{file}:{line}: {_unlinked_message(ident)}" for file, line, ident in missing]
+
+
+def _unlinked_message(ident: str) -> str:
+    return (f"{ident} is named in no test file; write {ident} in the name, docstring or a comment of the test that "
+            f"tries it (test files: {', '.join(TEST_NAMES)}, or source files under "
+            f"{'/, '.join(TEST_FOLDERS)}/)")
 
 
 # ------------------------------------------------------------------ manifests
@@ -1927,6 +2004,9 @@ def check_project(root, today: date | None = None,
     problems += architecture_problems(root, tracked, stages, overrides)
     found, more = go_live_ownership_problems(root, tracked, stages, overrides, today or date.today(),
                                              private_unavailable)
+    problems += found
+    notes += more
+    found, more = traceability_problems(root, tracked, stages)
     problems += found
     notes += more
     if stages is not None:
