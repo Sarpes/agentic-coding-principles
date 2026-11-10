@@ -192,6 +192,21 @@ class GateRobustness(unittest.TestCase):
         self.assertEqual(crashes[:10], [], f"{len(crashes)} of {runs} documents crashed the gate (seed {SEED})")
         self.assertEqual(slow[:10], [], f"{len(slow)} documents took over {SLOW_SECONDS}s")
 
+    def test_a_path_with_thousands_of_parts_is_judged_quickly(self):
+        """Found on CI for 0.3.5: a fuzzed 'Record:' path of 29,100 parts took 4.1 s in Path.is_relative_to, which
+        walks every parent. The inside-the-project test must take one pass over the text."""
+        long = "../proj-internal/" + "a\\|/" * 30000 + "OWNERSHIP.md"
+        started = time.perf_counter()
+        self.assertFalse(check_gates.inside(self.root / long, self.root))
+        self.assertTrue(check_gates.inside(self.root / ("a/" * 30000 + "x.md"), self.root))
+        self.assertLess(time.perf_counter() - started, 1.0)
+
+    def test_inside_answers_like_the_slow_check_on_ordinary_paths(self):
+        for rel, expected in (("docs/a.md", True), ("../other/a.md", False), ("a/../../b.md", False),
+                              ("a/./b/../c.md", True), (".", True)):
+            with self.subTest(rel=rel):
+                self.assertEqual(check_gates.inside(self.root / rel, self.root), expected)
+
     def test_many_unclosed_comment_openers_finish_quickly(self):
         """Found by the garbage run: a long line of '<!--' with no '-->' made clean_lines quadratic (48 s for 160 KB)."""
         text = "<!--" * 20000
