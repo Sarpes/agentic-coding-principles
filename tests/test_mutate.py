@@ -74,6 +74,15 @@ class RunnerTests(unittest.TestCase):
         self.assertRegex(result.stdout, r"killed\s*\|\s*[1-9]")
         self.assertIn("calc.py:2", result.stdout)
 
+    def test_a_survivor_is_shown_with_the_original_line(self):
+        """Found on the first real run: the line text was read from the rewritten copy, whose lines shift because
+        ast.unparse drops comments and blank lines, so the report showed an empty or wrong line."""
+        commented = "# a comment\n\n# another\n" + CALC
+        root = make_project({"calc.py": commented, "test_calc.py": WEAK_TEST})
+        result = run(root, ["calc.py"])
+        self.assertIn("calc.py:5", result.stdout)
+        self.assertIn("`return age >= 18`", result.stdout)
+
     def test_the_project_is_byte_identical_after_a_run(self):
         root = make_project({"calc.py": CALC, "test_calc.py": WEAK_TEST})
         before = digest(root)
