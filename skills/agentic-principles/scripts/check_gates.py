@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -439,6 +440,16 @@ def parse_evidence(cell: str):
     return items, errors
 
 
+def inside(path, root) -> bool:
+    """True when `path`, resolved, is `root` or below it. One pass over the text: Path.is_relative_to walks every
+    parent and took 4 s on a fuzzed path of 29,100 parts. A path that cannot be resolved counts as outside."""
+    try:
+        target, base = os.path.normcase(str(Path(path).resolve())), os.path.normcase(str(Path(root).resolve()))
+    except (OSError, ValueError):
+        return False
+    return target == base or target.startswith(base.rstrip("\\/") + os.sep)
+
+
 def norm_path(value: str) -> str:
     return posixpath.normpath(value.replace("\\", "/"))
 
@@ -482,11 +493,7 @@ def evidence_item_problems(kind: str, value: str, root: Path, tracked: set[str],
     if is_gate_record(rel):
         return [f"file:{value}: {rel} is the gate's own record and cannot be evidence"]
     path = root / rel
-    try:
-        inside = path.resolve().is_relative_to(root.resolve())
-    except (OSError, ValueError):
-        inside = False
-    if not inside:
+    if not inside(path, root):
         return [f"file:{value} points outside the project"]
     if path.is_dir():
         return [f"file:{value} is a folder; name a file"]
@@ -967,13 +974,13 @@ def file_map_problems(text, tracked, overrides, file: str = ARCHITECTURE_FILE) -
         if not description.strip():
             problems.append(Problem(file, number, f"{path} has no description; say what it does"))
         if path.endswith("/"):
-            inside = [t for t in tracked if t.startswith(path)]
-            if not inside:
+            below = [t for t in tracked if t.startswith(path)]
+            if not below:
                 problems.append(Problem(file, number, f"{path} matches no tracked file"))
                 continue
-            covered.update(inside)
-            if len(inside) > MAX_FOLDER_FILES and not BULK.search(description):
-                problems.append(Problem(file, number, f"{path} covers {len(inside)} files; a folder row may cover "
+            covered.update(below)
+            if len(below) > MAX_FOLDER_FILES and not BULK.search(description):
+                problems.append(Problem(file, number, f"{path} covers {len(below)} files; a folder row may cover "
                                         f"at most {MAX_FOLDER_FILES} unless its description holds (bulk: <reason>)"))
         elif path in tracked_set:
             covered.add(path)
@@ -1777,10 +1784,9 @@ def private_record(root, text, private_unavailable: bool = False):
                                      f"project folder, like {RECORD_EXAMPLE}; an absolute path names one machine")], []
     try:
         target = (root / value).resolve()
-        inside = target.is_relative_to(root.resolve())
     except (OSError, ValueError):
-        target, inside = root / value, False
-    if inside:
+        target = root / value
+    if inside(target, root):
         return None, value, [Problem(OWNERSHIP_FILE, number, f"Record '{value}' is inside the project folder, so it "
                                      "would be committed with the project; keep it in the private companion repo "
                                      "next to the project")], []
