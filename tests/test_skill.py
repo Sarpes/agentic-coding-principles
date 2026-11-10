@@ -17,7 +17,7 @@ STAGES = SKILL_DIR / "stages"
 COMPANIONS = SKILL_DIR / "companions.json"
 PLUGIN = ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
-VERSION = "0.3.0"
+VERSION = "0.3.5"
 HEADINGS = ("## Purpose", "## Do", "## Companions", "## Gate", "## Small")
 STAGE_FILES = ("00-intake.md", "01-design.md", "02-plan.md", "03-build.md", "04-verify.md", "05-ship.md",
                "06-own.md", "07-retro.md")
