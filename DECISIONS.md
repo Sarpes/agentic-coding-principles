@@ -272,6 +272,16 @@ Decision log for Agentic Engineering Principles (D24 records the rename). Each d
 - **Cost / trade-off:** A project already past Stage 0 or 1 under the skill now fails until it adds `GRILLING.md` or logs an override. The gate counts rows; it cannot tell a searching challenge from a shallow one, or prove the answer is the owner's.
 - **What would make you change it:** Rounds that routinely produce three trivial rows, which would call for a per-size minimum or a reviewer reading the record; or a project type where grilling the requirements is impossible (for example, requirements fixed by a third party), which would call for a recorded exemption.
 
+### D28. Every outside project, format and source is credited in CREDITS.md, kept complete by a test
+
+- **Context:** The README named the companion plugins "by plugin only": no author, source or licence. The changelog follows Keep a Changelog and the decision log builds on Architecture Decision Records, and neither was named. The owner ruled on 2026-11-10: cite every source and project, give credit where it is due, never take anyone's work.
+- **Options considered:** (a) add authors and links to the README table; (b) a separate `CREDITS.md` with author, https source and licence for each companion plugin and each format, checked by a test that derives the plugin list from `companions.json`; (c) a credit line inside each stage file.
+- **Chosen:** (b). The facts were read from each project's own manifest, licence file or page on 2026-11-10, and the file says so. `CLAUDE.md` gains the rule that new outside work gets its row in the same branch, and that copied text follows its licence.
+- **Why:** A credit list kept by hand drifts the day a companion is added; the test fails then. One file gives a reader, or an author checking how their work is used, a single place to look.
+- **Rejected:** (a), the README table already carries what each plugin does here, and the licence column would crowd it; (c), the same plugin is used in several stages, so its credit would be repeated and drift.
+- **Cost / trade-off:** The licences are read at one date; a project that changes its licence is not noticed until someone reads it again. The test checks that each row has an author, an https source and a licence cell, not that they are right.
+- **What would make you change it:** A companion whose licence asks for a specific notice text, which would be copied into `CREDITS.md` word for word; or copying any outside text into this repository, which would bring that project's licence terms into the file that holds the text.
+
 ## Assumptions
 
 - Users run Python 3.11 or newer.

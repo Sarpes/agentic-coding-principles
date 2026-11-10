@@ -254,8 +254,8 @@ class ChangelogTests(unittest.TestCase):
         self.assertLess(text.index("## Unreleased"), match.start())
 
     def test_release_0_3_0_holds_the_private_record_and_the_grilling_gate(self):
-        """Release-time check for 0.3.0: both breaking changes moved under a dated 0.3.0 heading, above 0.2.0, and
-        Unreleased left empty."""
+        """Both breaking changes stay under a dated 0.3.0 heading, between Unreleased and 0.2.0. The empty Unreleased
+        list was a release-time check (it held when v0.3.0 was tagged at e717908); new work fills it again."""
         text = read(ROOT / "CHANGELOG.md")
         match = re.search(r"^## \[0\.3\.0\] - \d{4}-\d{2}-\d{2}$", text, re.M)
         if match is None:
@@ -263,8 +263,6 @@ class ChangelogTests(unittest.TestCase):
         released = text[match.end():].split("\n## ", 1)[0]
         for needle in ("OWNERSHIP-RECORD.md", "--private-unavailable", "GRILLING.md"):
             self.assertIn(needle, released)
-        unreleased = text.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
-        self.assertEqual(unreleased.strip(), "")
         self.assertLess(text.index("## Unreleased"), match.start())
         self.assertLess(match.start(), text.index("## [0.2.0]"))
 

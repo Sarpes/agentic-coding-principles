@@ -6,6 +6,7 @@ Agentic Engineering Principles: rules, stage gates, templates and a tested docum
 
 ```
 README.md  LICENSE  CHANGELOG.md  CLAUDE.md
+CREDITS.md             every outside project, format and source used: author, source, licence (tests/test_credits.py)
 DECISIONS.md           this repository's decisions (seven fields each)
 AI-Agents.md           this repository's AI usage log (five fields each)
 RESULTS.md             measurements of this repository's own scripts: rules removed on a copy, clean clone
@@ -42,3 +43,4 @@ Python 3.11+, standard library only.
 - Squash merges: use merge commits so the history reads as the development story.
 - Leave a decision or log field blank.
 - Commit straight to `main`: one branch per task.
+- Use anyone else's work without credit: a new companion, format or source gets its row in `CREDITS.md` (author, https source, licence) in the same branch. Copy text or code from another project only as its licence allows, credited in `CREDITS.md`; Trail of Bits skills are CC BY-SA 4.0, so a copied part would have to stay under that licence. Public open-source projects named for credit are not the private projects the first rule protects.
