@@ -273,3 +273,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None yet: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** init first looked for any line starting with "Skill-version:" and found two, because the template's own comment explains the field on a line that starts the same way; 40 init tests errored. It now matches only a line holding a version number.
+
+### 35. Linking requirements and attacks to tests (2026-11-10)
+
+- **Prompt (or summary of it):** Implement the agreed suggestions in order; next, the requirement-to-test link (roadmap Task 1).
+- **What the AI produced:** Failing tests first (commit dfde053), then `test_files`, `traceability` and `traceability_problems` in `check_gates.py`, `n/a: <reason>` as an exempt Rung for attacks, the fixture's test file naming every id, the walk's test file naming its ids, a Stage 4 step, an attack-template line, a README limit and D30.
+- **What I kept:** None yet: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The brief asked for a note before Stage 4 on every run; the AI judged that noisy and started the note at Stage 3 passed instead, a change the owner should confirm (recorded in D30). The Full walk test failed once the rule was on, correctly: its template-built test file named no ids.
