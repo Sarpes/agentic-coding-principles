@@ -8,6 +8,7 @@ the look-alike tests below prove it can fail.
 """
 import json
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -265,6 +266,29 @@ class ChangelogTests(unittest.TestCase):
             self.assertIn(needle, released)
         self.assertLess(text.index("## Unreleased"), match.start())
         self.assertLess(match.start(), text.index("## [0.2.0]"))
+
+    def test_release_0_3_5_holds_the_round_after_0_3_0(self):
+        """Release-time check for 0.3.5: the work merged after 0.3.0 sits under a dated 0.3.5 heading, between
+        Unreleased and 0.3.0, and Unreleased is empty. Narrow the emptiness check right after the release."""
+        text = read(ROOT / "CHANGELOG.md")
+        match = re.search(r"^## \[0\.3\.5\] - \d{4}-\d{2}-\d{2}$", text, re.M)
+        if match is None:
+            self.fail("no dated 0.3.5 section")
+        released = text[match.end():].split("\n## ", 1)[0]
+        for needle in ("CREDITS.md", "Skill-version", "scripts/mutate.py", "test file"):
+            self.assertIn(needle, released)
+        unreleased = text.split("## Unreleased", 1)[1].split("\n## ", 1)[0]
+        self.assertEqual(unreleased.strip(), "")
+        self.assertLess(text.index("## Unreleased"), match.start())
+        self.assertLess(match.start(), text.index("## [0.3.0]"))
+
+    def test_release_0_3_5_lists_its_migration(self):
+        """The test-link rule is new work for a Full project already past Stage 4, so 0.3.5 has a migration note."""
+        sys.path.insert(0, str(ROOT / "skills" / "agentic-principles" / "scripts"))
+        import check_gates
+        steps = [step for version, step in check_gates.MIGRATIONS if version == (0, 3, 5)]
+        self.assertEqual(len(steps), 1, steps)
+        self.assertIn("REQ-n", steps[0])
 
 
 if __name__ == "__main__":

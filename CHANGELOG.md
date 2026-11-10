@@ -4,6 +4,11 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+## [0.3.5] - 2026-11-10
+
+The round merged after 0.3.0. A Full project already past Stage 4 must name each requirement and attack in a test file; the gate lists this and the other steps as migration notes.
+
+- `check_gates.py`: whether a path lies inside the project is decided in one pass over the text; a fuzzed `Record:` path of 29,100 parts took 4.1 seconds in `Path.is_relative_to`, now 0.6 seconds for the whole document.
 - `scripts/mutate.py`: rung 2 for Python from a script in this repository, on a throwaway copy, with five kinds of change and a table ready for `RESULTS.md`; the fallback for proving tests catch breakage (D31). First run on `checks/check_docs.py`: 145 mutants, 131 then 133 killed in two runs.
 - `check_companions.py`: each MISSING line names the fallback to use, and `stage_table_problems` checks that every stage file names each of its companions with a fallback; tests prove the skill runs with none installed.
 - `check_gates.py`: from Stage 4 on, every `REQ-n` and `ATK-n` must be named in a test file (a problem on Full, a note on Small; a note from Stage 3 on). An attack whose Rung is `n/a: <reason>` is exempt (D30).
