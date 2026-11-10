@@ -4,6 +4,7 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `check_companions.py`: each MISSING line names the fallback to use, and `stage_table_problems` checks that every stage file names each of its companions with a fallback; tests prove the skill runs with none installed.
 - `check_gates.py`: from Stage 4 on, every `REQ-n` and `ATK-n` must be named in a test file (a problem on Full, a note on Small; a note from Stage 3 on). An attack whose Rung is `n/a: <reason>` is exempt (D30).
 - `STAGES.md` records the skill version (`Skill-version:`, written by `init_project.py`). `check_gates.py` lists, as notes, each migration a project set up with an earlier version still has to make (all of them when the line is missing), and refuses a project newer than its copied gate script (D29).
 - `CREDITS.md`: every companion project the skill names (18), with its author, source and licence, and the formats and sources this project follows (Keep a Changelog, Architecture Decision Records, the Claude Code plugin documentation, the checklist sources). `tests/test_credits.py` fails when a companion has no credit (D28).

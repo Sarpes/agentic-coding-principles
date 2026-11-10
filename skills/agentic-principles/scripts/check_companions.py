@@ -121,16 +121,19 @@ def missing(rows: list[dict], available: set[str]) -> list[str]:
 
 def report(rows: list[dict], available: set[str]) -> list[str]:
     needs: dict[str, list[str]] = {}
+    fallbacks: dict[str, str] = {}
     for r in rows:
         if r["kind"] not in NOT_LOOKED_UP and r.get("requires"):
             needs[r["primary"]] = r["requires"]
+        for name in _names(r):
+            fallbacks.setdefault(name, r["fallback"])
     absent = missing(rows, available)
     lines = []
     for name in absent:
         extra = f" (needs the {', '.join(needs[name])} tool in the session)" if name in needs else ""
         lines.append(
             f"MISSING {name}{extra}: not found in the plugin cache; confirm against the session's "
-            "skill list before using the fallback"
+            f"skill list before using the fallback: {fallbacks.get(name, '-')}"
         )
     for name, tools in needs.items():
         if name not in absent:
@@ -138,6 +141,25 @@ def report(rows: list[dict], available: set[str]) -> list[str]:
     if not absent:
         lines.insert(0, "all mapped companions are installed and enabled")
     return lines
+
+
+def stage_table_problems(rows: list[dict], stage_texts: dict[int, str]) -> list[str]:
+    """Each companion a stage uses must have a row in that stage file's '## Companions' table with a non-blank
+    'If it is missing' cell, so the agent reading only the current stage file still knows the fallback."""
+    problems = []
+    for r in rows:
+        for stage in r["stages"]:
+            text = stage_texts.get(stage, "")
+            section = text.split("## Companions", 1)[1].split("\n## ", 1)[0] if "## Companions" in text else ""
+            table = [line for line in section.split("\n") if line.lstrip().startswith("|")]
+            found = [line for line in table if r["primary"] in line]
+            if not found:
+                problems.append(f"stage {stage} file has no Companions row naming {r['primary']}")
+                continue
+            cells = [c.strip() for c in found[0].strip().strip("|").split("|")]
+            if len(cells) < 3 or not cells[2]:
+                problems.append(f"stage {stage} file: the fallback cell for {r['primary']} is blank")
+    return problems
 
 
 def main(argv: list[str] | None = None) -> int:
