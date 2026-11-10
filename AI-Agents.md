@@ -297,3 +297,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** None yet: the owner reviews this at the pull request.
 - **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
 - **Where the AI was wrong, and how I noticed:** The first real run showed survivors with an empty or wrong line: the line number came from the original file but the text was read from the rewritten copy, whose lines shift because `ast.unparse` drops comments. A regression test now pins the original line. The same run, repeated with the same code, gave 131 killed of 145 and then 133 of 145: two outcomes changed between runs, which points to a timing-dependent test in `tests/test_check_docs.py`; recorded as open, not silenced.
+
+### 38. Releasing 0.3.5 (2026-11-10)
+
+- **Prompt (or summary of it):** Release the merged round as v0.3.5, not 0.4.0; 0.4.0 comes when the remaining plan is done and merged.
+- **What the AI produced:** Tests asking for a dated 0.3.5 section, version 0.3.5 in both manifests, `check_gates.py` and the `STAGES.md` template, and a 0.3.5 migration step, watched failing; then the version raised, the migration step for the requirement-to-test rule, and the Unreleased list moved under 0.3.5. The tag, the GitHub release and the A-Lab copy follow once CI on `main` is green.
+- **What I kept:** None yet: the owner reviews this at the pull request.
+- **What I changed or rejected, and why:** None yet: the owner reviews this at the pull request.
+- **Where the AI was wrong, and how I noticed:** The AI had proposed calling this round 0.4.0; the owner chose 0.3.5 and keeps 0.4.0 for the planned work.

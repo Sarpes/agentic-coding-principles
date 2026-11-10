@@ -42,7 +42,7 @@ from datetime import date, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import NamedTuple
 
-__version__ = "0.3.0"
+__version__ = "0.3.5"
 
 # What a project set up with an earlier skill version must change, by the release that changed it. The gate lists
 # each step released after the project's Skill-version line as a note. A breaking release adds its steps here.
@@ -52,6 +52,9 @@ MIGRATIONS: tuple[tuple[tuple[int, int, int], str], ...] = (
                 "'Record:' and 'Explain-back done:' to OWNERSHIP.md"),
     ((0, 3, 0), "add GRILLING.md (template GRILLING.md) and name it in the evidence of stages 0 and 1 if they are "
                 "already passed, or log an override for each"),
+    ((0, 3, 5), "on a Full project past stage 4, write each REQ-n and ATK-n in the name, docstring or a comment of "
+                "the test that tries it (give an attack that cannot happen here 'n/a: <reason>' in its Rung "
+                "column), and add the 'Skill-version:' line to STAGES.md"),
 )
 VERSION_TEXT = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
