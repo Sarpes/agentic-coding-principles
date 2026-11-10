@@ -257,3 +257,11 @@ This log was written entry by entry during the work. Decision numbers (Dn) refer
 - **What I kept:** One release for both breaking changes, as the owner decided, with what an existing project must do written at the top of the 0.3.0 section.
 - **What I changed or rejected, and why:** None: the owner asked for the release as planned.
 - **Where the AI was wrong, and how I noticed:** No new error in this step.
+
+### 33. Crediting every outside project and source (2026-11-10)
+
+- **Prompt (or summary of it):** Are we violating any licence by listing other plugins? Keep licences in mind; cite every source and project, give credit where it is due; I don't want to steal anyone's work.
+- **What the AI produced:** An answer that naming plugins copies nothing, with the licences read from the installed copies (Apache 2.0, MIT, CC BY-SA 4.0, two not found). Then a failing test (commit f04eff4), `CREDITS.md` with 18 companion projects and 3 formats and sources, each with author, https source and licence read from its own files or page, a README link, a rule in `CLAUDE.md`, and D28.
+- **What I kept:** Credit for everything the skill names or follows, at the owner's request.
+- **What I changed or rejected, and why:** None: the owner asked for the credits as built.
+- **Where the AI was wrong, and how I noticed:** The first draft credited repo-kickoff to the full name in this repository's licence; repo-kickoff's own licence file says "Sarp Esenyel", which is what its credit must say. Noticed by reading that licence file before committing.

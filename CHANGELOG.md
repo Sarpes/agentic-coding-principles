@@ -4,6 +4,8 @@ All notable changes to this project are recorded here.
 
 ## Unreleased
 
+- `CREDITS.md`: every companion project the skill names (18), with its author, source and licence, and the formats and sources this project follows (Keep a Changelog, Architecture Decision Records, the Claude Code plugin documentation, the checklist sources). `tests/test_credits.py` fails when a companion has no credit (D28).
+
 ## [0.3.0] - 2026-11-10
 
 Two breaking changes for projects already under the skill: move the ownership answers to the private record and add the `Record:` and `Explain-back done` lines to `OWNERSHIP.md`; add `GRILLING.md` for Stages 0 and 1 already passed, or log an override.
